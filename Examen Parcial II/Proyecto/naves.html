@@ -1,15 +1,17 @@
 <!DOCTYPE html>
-<html>
+<html lang="es">
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Videojuego con Javascript y HTML5</title>
-    <link type="text/css" rel="stylesheet" href="css/main.css?14042012">
-    <script src="js/videojuego-javascript.js?04042012" type="text/javascript"></script>
+    <link type="text/css" rel="stylesheet" href="css/main.css?20260417">
+    <script src="js/videojuego-javascript.js?20260417" type="text/javascript" defer></script>
 </head>
-<body onload="game.init()">
+<body>
     <div class="contenedor">
         <div class="izquierda">
-                <img src="images/autentia.png" style="width: 250px; height: 100px;" />
+            <img src="images/autentia.png" alt="Autentia" style="width: 250px; height: 100px;" />
+            
             <ul class="lista">
                 <li class="titulo">CONTROLES:</li>
                 <li class="izquierda">izquierda</li>
@@ -17,25 +19,66 @@
                 <li class="espacio">disparar</li>
             </ul>
             <ul class="lista">
-                <li class="titulo">PROBADO CON:</li>
-                <li class="firefox">Mozilla Firefox 11</li>
-                <li class="chrome">Google Chrome 18</li>
-                <li class="safari">Safari 5.1</li>
+                <li class="titulo">PROBADO CON (referencia del desarrollo):</li>
+                <li class="firefox">Mozilla Firefox 128 / 135</li>
+                <li class="chrome">Google Chrome 131 / 134</li>
+                <li class="edge">Microsoft Edge 131 / 134</li>
             </ul>
             <ul class="lista">
                 <li class="titulo">OTROS:</li>
-                <li><a>Tutorial</a></li>
-                <li><a>Especificaciones del juego</a></li>
+                <li><a href="#" id="link-tutorial">Tutorial</a> <span class="nota-enlace">(contenido en especificaciones)</span></li>
+                <li><button type="button" class="link-button" id="btn-especificaciones">Especificaciones del juego</button></li>
             </ul>
         </div>
         <div class="derecha">
             <h3 class="tituloPuntuaciones">MEJORES PUNTUACIONES</h3>
-            <ul id="puntuaciones"></ul>
+            <ul id="puntuaciones" class="tabla-puntos"></ul>
         </div>
-        <div class="juego">
-            <canvas id="canvas" width="600" height="650">TU NAVEGADOR NO SOPORTA HTML5!</canvas>
+        <div class="centro-juego">
+            <div class="juego">
+                <canvas id="canvas" width="600" height="650">TU NAVEGADOR NO SOPORTA HTML5!</canvas>
+                <div id="overlay-fin" class="overlay-fin hidden" aria-live="polite">
+                    <div class="panel-fin">
+                        <h2 id="overlay-titulo"></h2>
+                        <p id="overlay-detalle" class="overlay-detalle"></p>
+                        <p id="overlay-puntos" class="overlay-puntos"></p>
+                        <button type="button" id="btn-volver-jugar" class="btn">Volver a jugar</button>
+                    </div>
+                </div>
+            </div>
         </div>
+    </div>
 
+    <div id="modal-inicio" class="modal" role="dialog" aria-labelledby="modal-inicio-titulo" aria-modal="true">
+        <div class="modal-contenido modal-inicio-caja">
+            <h2 id="modal-inicio-titulo">Nueva partida</h2>
+            <p class="modal-texto">Introduce tu nombre para esta partida. Si lo dejas vacío se usará <strong>jugador</strong>.</p>
+            <label for="nombre-partida" class="label-modal">Nombre</label>
+            <input type="text" id="nombre-partida" class="input-modal" maxlength="24" placeholder="jugador" autocomplete="nickname" />
+            <button type="button" id="btn-comenzar-partida" class="btn btn-ancho">Comenzar partida</button>
+        </div>
+    </div>
+
+    <div id="modal-especificaciones" class="modal hidden" role="dialog" aria-labelledby="modal-esp-titulo" aria-modal="true">
+        <div class="modal-contenido">
+            <button type="button" class="modal-cerrar" id="modal-esp-cerrar" aria-label="Cerrar">×</button>
+            <h2 id="modal-esp-titulo">Especificaciones del juego</h2>
+            <div class="modal-texto">
+                <h3>Objetivo</h3>
+                <p>Elimina a los enemigos disparando con la barra espaciadora. Sobrevive y derrota al jefe final. Cada enemigo destruido suma puntos.</p>
+                <h3>Controles</h3>
+                <ul>
+                    <li><strong>Flecha izquierda / derecha:</strong> mover la nave (medusa).</li>
+                    <li><strong>Barra espaciadora:</strong> disparar (con cadencia limitada).</li>
+                </ul>
+                <h3>Puntuación</h3>
+                <p>Los puntos por enemigo aumentan en cada oleada. Al acabar el juego con éxito, la puntuación total incluye un bonus por las vidas restantes (5 puntos por vida). Las mejores marcas se guardan en este navegador (localStorage).</p>
+                <h3>Navegadores</h3>
+                <p>El juego usa HTML5 Canvas y JavaScript estándar. Se ha probado en las versiones listadas en la columna izquierda; otros navegadores compatibles con Canvas suelen funcionar.</p>
+                <h3>Tutorial</h3>
+                <p>Mueve la nave esquivando disparos enemigos. Cuando quede un solo enemigo en la cola, el siguiente será el <strong>jefe final</strong> (lo indicará el panel del juego). El jefe tiene más vida y disparos.</p>
+            </div>
+        </div>
     </div>
 
 </body>
