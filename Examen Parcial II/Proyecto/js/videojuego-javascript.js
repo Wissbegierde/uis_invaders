@@ -531,27 +531,15 @@ var game = (function () {
 
     /******************************* MEJORES PUNTUACIONES (LOCALSTORAGE) *******************************/
     function saveFinalScore() {
-        localStorage.setItem(getFinalScoreDate(), getTotalScore());
-        showBestScores();
-        removeNoBestScores();
-    }
-
-    function getFinalScoreDate() {
-        var date = new Date();
-        return fillZero(date.getDay()+1)+'/'+
-            fillZero(date.getMonth()+1)+'/'+
-            date.getFullYear()+' '+
-            fillZero(date.getHours())+':'+
-            fillZero(date.getMinutes())+':'+
-            fillZero(date.getSeconds());
-    }
-
-    function fillZero(number) {
-        if (number < 10) {
-            return '0' + number;
+        var playerName = prompt("Ingresa tu nombre para guardar la puntuación:");
+        if (playerName) {
+            localStorage.setItem(playerName, getTotalScore());
+            showBestScores();
+            removeNoBestScores();
         }
-        return number;
     }
+
+
 
     function getBestScoreKeys() {
         var bestScores = getAllScores();
@@ -592,7 +580,7 @@ var game = (function () {
 
     function clearList(list) {
         list.innerHTML = '';
-        addListElement(list, "Fecha");
+        addListElement(list, "Nombre");
         addListElement(list, "Puntos");
     }
 
