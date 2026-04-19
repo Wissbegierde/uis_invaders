@@ -177,7 +177,6 @@ var game = (function () {
                 evilShotsBuffer.splice(0, evilShotsBuffer.length);
                 playerShotsBuffer.splice(0, playerShotsBuffer.length);
                 this.src = playerKilledImage.src;
-                createNewEvil();
                 setTimeout(function () {
                     player = new Player(player.life - 1, player.score);
                 }, 500);
@@ -368,6 +367,20 @@ var game = (function () {
             shot.deleteShot(parseInt(shot.identifier));
             return false;
         }
+        // Verificar colisión con disparos enemigos
+        for (var i = 0; i < evilShotsBuffer.length; i++) {
+            var evilShot = evilShotsBuffer[i];
+            if (
+                shot.posX < evilShot.posX + evilShot.image.width &&
+                shot.posX + shot.image.width > evilShot.posX &&
+                shot.posY < evilShot.posY + evilShot.image.height &&
+                shot.posY + shot.image.height > evilShot.posY
+            ) {
+                shot.deleteShot(shot.identifier);
+                evilShot.deleteShot(i);
+                return false;
+            }
+        }
         return true;
     }
 
@@ -491,6 +504,7 @@ var game = (function () {
                     evilShot.deleteShot(parseInt(evilShot.identifier));
                 }
             } else {
+                evilShot.deleteShot(parseInt(evilShot.identifier));
                 player.killPlayer();
             }
         }
