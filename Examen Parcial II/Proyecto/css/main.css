@@ -1,0 +1,326 @@
+body {
+    background: #ccc;
+    color: #333;
+    font: 14px 'Press Start 2P', 'Arial', sans-serif;
+    text-align: center;
+}
+a {
+    color: #506e2f;
+    text-decoration: none;
+}
+a:hover {
+    color: #ff4500;
+}
+button.link-button {
+    background: none;
+    border: none;
+    color: #506e2f;
+    cursor: pointer;
+    font: inherit;
+    padding: 0;
+    text-decoration: underline;
+}
+button.link-button:hover {
+    color: #ff4500;
+}
+div.contenedor {
+    width: 100%;
+    max-width: 1680px;
+    margin: 0 auto;
+}
+div.izquierda, div.derecha {
+    width: 280px;
+}
+div.izquierda {
+    float: left;
+    text-align: left;
+}
+div.centro-juego {
+    margin: 0 290px;
+    text-align: center;
+    min-width: 0;
+}
+div.juego {
+    position: relative;
+    display: inline-block;
+}
+div.juego canvas {
+    box-shadow: 0 0 30px #000;
+    display: block;
+}
+.overlay-fin {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.72);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+}
+.overlay-fin.hidden {
+    display: none;
+}
+.panel-fin {
+    background: linear-gradient(160deg, #1a1a2e 0%, #16213e 100%);
+    border: 2px solid #e94560;
+    border-radius: 12px;
+    padding: 28px 32px;
+    max-width: 90%;
+    color: #eee;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+}
+.panel-fin h2 {
+    font-size: 1.75rem;
+    margin: 0 0 12px 0;
+    color: #ffd166;
+    text-shadow: 0 2px 4px #000;
+}
+.overlay-detalle {
+    font-size: 0.95rem;
+    line-height: 1.5;
+    margin: 8px 0;
+    color: #ccc;
+}
+.overlay-puntos {
+    font-size: 1.1rem;
+    font-weight: bold;
+    color: #06d6a0;
+    margin: 16px 0;
+}
+.input-overlay {
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid #999;
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin: 8px 0 14px 0;
+    font-size: 1rem;
+}
+.hidden {
+    display: none !important;
+}
+.btn {
+    background: #e94560;
+    color: #fff;
+    border: none;
+    padding: 12px 24px;
+    font-size: 1rem;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: bold;
+}
+.btn:hover {
+    background: #ff6b6b;
+}
+.btn-pequeño {
+    padding: 6px 12px;
+    font-size: 0.85rem;
+    margin-top: 8px;
+}
+.btn-secundario {
+    background: #444;
+}
+.btn-secundario:hover {
+    background: #666;
+}
+div.derecha {
+    float: right;
+}
+div.derecha h3.tituloPuntuaciones {
+    background: url("../images/medalla.png") no-repeat left;
+    padding: 10px;
+}
+div.derecha ul#puntuaciones {
+    width: 280px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+.tabla-puntos li.cabecera {
+    font-weight: bold;
+    background: #ddd;
+}
+.tabla-puntos.flash-maximo {
+    animation: flashMaximo 0.9s ease-in-out 3;
+}
+@keyframes flashMaximo {
+    0% { box-shadow: 0 0 0 rgba(255, 208, 0, 0); background: transparent; }
+    50% { box-shadow: 0 0 16px rgba(255, 208, 0, 0.9); background: rgba(255, 235, 120, 0.45); }
+    100% { box-shadow: 0 0 0 rgba(255, 208, 0, 0); background: transparent; }
+}
+div.derecha ul#puntuaciones li{
+    line-height:1.5em;
+    border-bottom:1px solid #aaa;
+    box-sizing: border-box;
+    width: 33.33%;
+    float: left;
+    display: block;
+    padding: 8px 4px;
+    font-size: 12px;
+    word-break: break-word;
+}
+.negrita {
+    font-weight: bold;
+}
+ul.lista {
+    margin: 25px 0;
+    padding: 0;
+    list-style: none;
+    text-align: left;
+}
+ul.lista li {
+    padding: 10px 0;
+}
+ul.lista li.firefox, ul.lista li.chrome, ul.lista li.safari, ul.lista li.edge, ul.lista li.izquierda, ul.lista li.derecha, ul.lista li.espacio {
+    padding-left: 40px;
+}
+ul.lista li.izquierda {
+    background: url("../images/izquierda.png") no-repeat left;
+}
+ul.lista li.derecha {
+    background: url("../images/derecha.png") no-repeat left;
+}
+ul.lista li.espacio {
+    background: url("../images/space.gif") no-repeat left;
+}
+ul.lista li.firefox {
+    background: url("../images/firefox.png") no-repeat left;
+}
+ul.lista li.chrome {
+    background: url("../images/chrome.png") no-repeat left;
+}
+ul.lista li.safari {
+    background: url("../images/safari.png") no-repeat left;
+}
+ul.lista li.edge {
+    background: url("../images/chrome.png") no-repeat left;
+    opacity: 0.95;
+}
+ul.lista li.titulo {
+    font-weight: bold;
+}
+.bloque-usuario {
+    margin: 16px 0;
+    padding: 12px;
+    background: #e8e8e8;
+    border-radius: 8px;
+    border: 1px solid #bbb;
+}
+.titulo-seccion {
+    font-weight: bold;
+    margin: 0 0 8px 0;
+    font-size: 13px;
+}
+#nombre-jugador {
+    width: 100%;
+    max-width: 240px;
+    padding: 6px 8px;
+    box-sizing: border-box;
+    border: 1px solid #999;
+    border-radius: 4px;
+}
+.nombre-actual {
+    margin: 10px 0 4px 0;
+    font-size: 13px;
+}
+.nota-enlace {
+    font-size: 11px;
+    color: #666;
+}
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0,0,0,0);
+    border: 0;
+}
+.modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.55);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    overflow-y: auto;
+}
+.modal.hidden {
+    display: none;
+}
+.modal-contenido {
+    background: #f5f5f5;
+    color: #222;
+    max-width: 560px;
+    width: 100%;
+    border-radius: 10px;
+    padding: 24px 28px 32px;
+    position: relative;
+    text-align: left;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.35);
+}
+.modal-contenido h2 {
+    margin-top: 0;
+    font-size: 1.4rem;
+}
+.modal-texto h3 {
+    font-size: 1rem;
+    margin: 18px 0 8px 0;
+    color: #333;
+}
+.modal-texto p, .modal-texto ul {
+    font-size: 0.95rem;
+    line-height: 1.5;
+    margin: 0 0 8px 0;
+}
+.modal-texto {
+    font-size: 0.95rem;
+    line-height: 1.5;
+}
+.modal-texto ul {
+    padding-left: 1.2em;
+}
+.modal-cerrar {
+    position: absolute;
+    top: 12px;
+    right: 16px;
+    border: none;
+    background: transparent;
+    font-size: 28px;
+    line-height: 1;
+    cursor: pointer;
+    color: #666;
+}
+.modal-cerrar:hover {
+    color: #000;
+}
+.modal-inicio-caja .label-modal {
+    display: block;
+    text-align: left;
+    font-weight: bold;
+    margin: 12px 0 6px 0;
+    font-size: 0.9rem;
+}
+.modal-inicio-caja .input-modal {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 10px 12px;
+    font-size: 1rem;
+    border: 1px solid #999;
+    border-radius: 6px;
+}
+.btn-ancho {
+    width: 100%;
+    margin-top: 18px;
+}
+.contenedor::after {
+    content: "";
+    display: table;
+    clear: both;
+}

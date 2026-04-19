@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Videojuego con Javascript y HTML5</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <link type="text/css" rel="stylesheet" href="css/main.css?20260418">
+    <script src="js/videojuego-javascript.js?20260418" type="text/javascript" defer></script>
+</head>
+<body>
+    <div class="contenedor">
+        <div class="izquierda">
+            <img src="images/autentia.png" alt="Autentia" style="width: 250px; height: 100px;" />
+            <div class="bloque-usuario">
+                <p class="titulo-seccion">JUGADOR</p>
+                <label for="nombre-jugador" class="sr-only">Nombre del jugador</label>
+                <input type="text" id="nombre-jugador" maxlength="24" placeholder="Tu nombre" autocomplete="nickname" />
+                <button type="button" id="btn-guardar-nombre" class="btn btn-pequeño">Guardar nombre</button>
+                <p class="nombre-actual">Jugando como: <strong id="nombre-mostrar">jugador</strong></p>
+                <button type="button" id="btn-cambiar-nombre" class="btn btn-pequeño btn-secundario">Cambiar nombre</button>
+            </div>
+            <ul class="lista">
+                <li class="titulo">CONTROLES:</li>
+                <li class="izquierda">izquierda</li>
+                <li class="derecha">derecha</li>
+                <li class="espacio">disparar</li>
+            </ul>
+            <ul class="lista">
+                <li class="titulo">PROBADO CON:</li>
+                <li class="firefox">Mozilla Firefox 11</li>
+                <li class="chrome">Google Chrome 18</li>
+                <li class="safari">Safari 5.1</li>
+            </ul>
+            <ul class="lista">
+                <li class="titulo">OTROS:</li>
+                <li><a href="#" id="link-tutorial">Tutorial</a></li>
+                <li><button type="button" class="link-button" id="btn-especificaciones">Especificaciones del juego</button></li>
+            </ul>
+        </div>
+        <div class="derecha">
+            <h3 class="tituloPuntuaciones">MEJORES PUNTUACIONES</h3>
+            <ul id="puntuaciones" class="tabla-puntos"></ul>
+        </div>
+        <div class="centro-juego">
+            <div class="juego">
+                <canvas id="canvas" width="900" height="800">TU NAVEGADOR NO SOPORTA HTML5!</canvas>
+                <div id="overlay-fin" class="overlay-fin hidden" aria-live="polite">
+                    <div class="panel-fin">
+                        <h2 id="overlay-titulo"></h2>
+                        <p id="overlay-detalle" class="overlay-detalle"></p>
+                        <p id="overlay-puntos" class="overlay-puntos"></p>
+                        <label for="nombre-overlay" class="sr-only">Nombre para jugar</label>
+                        <input type="text" id="nombre-overlay" class="input-overlay hidden" maxlength="24" placeholder="jugador" autocomplete="nickname" />
+                        <button type="button" id="btn-jugar-overlay" class="btn hidden">Jugar</button>
+                        <button type="button" id="btn-volver-jugar" class="btn">Volver a jugar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="pantalla-inicio" class="modal hidden" role="dialog" aria-labelledby="pantalla-inicio-titulo" aria-modal="true">
+        <div class="modal-contenido modal-inicio-caja">
+            <h2 id="pantalla-inicio-titulo">UIS Invaders</h2>
+            <p class="modal-texto">Defiende tu medusa, supera niveles y derrota jefes.</p>
+            <button type="button" id="btn-jugar-inicio" class="btn btn-ancho">Jugar</button>
+        </div>
+    </div>
+
+    <div id="modal-inicio" class="modal hidden" role="dialog" aria-labelledby="modal-inicio-titulo" aria-modal="true">
+        <div class="modal-contenido modal-inicio-caja">
+            <h2 id="modal-inicio-titulo">Nueva partida</h2>
+            <p class="modal-texto">Introduce tu nombre para esta partida. Si lo dejas vacío se usará <strong>jugador</strong>.</p>
+            <label for="nombre-partida" class="label-modal">Nombre</label>
+            <input type="text" id="nombre-partida" class="input-modal" maxlength="24" placeholder="jugador" autocomplete="nickname" />
+            <button type="button" id="btn-comenzar-partida" class="btn btn-ancho">Comenzar partida</button>
+        </div>
+    </div>
+
+    <div id="modal-especificaciones" class="modal hidden" role="dialog" aria-labelledby="modal-esp-titulo" aria-modal="true">
+        <div class="modal-contenido">
+            <button type="button" class="modal-cerrar" id="modal-esp-cerrar" aria-label="Cerrar">×</button>
+            <h2 id="modal-esp-titulo">Especificaciones del juego</h2>
+            <div class="modal-texto">
+                <h3>Objetivo</h3>
+                <p>Elimina enemigos para avanzar de nivel. Cada cierto nivel aparece un jefe final más resistente.</p>
+                <h3>Controles</h3>
+                <ul>
+                    <li><strong>Flecha izquierda / derecha:</strong> mover la nave (medusa).</li>
+                    <li><strong>Barra espaciadora:</strong> disparar (con cadencia limitada).</li>
+                </ul>
+                <h3>Puntuación</h3>
+                <p>Los enemigos y jefes dan puntos. Al ganar, se suma un bonus de 5 puntos por vida restante. El ranking se guarda en el navegador.</p>
+                <h3>Dificultad</h3>
+                <p>La dificultad aumenta por nivel: más enemigos simultáneos, mayor velocidad y mayor frecuencia de disparos.</p>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-tutorial" class="modal hidden" role="dialog" aria-labelledby="modal-tutorial-titulo" aria-modal="true">
+        <div class="modal-contenido">
+            <button type="button" class="modal-cerrar" id="modal-tutorial-cerrar" aria-label="Cerrar">×</button>
+            <h2 id="modal-tutorial-titulo">Tutorial</h2>
+            <div class="modal-texto">
+                <p>1. Pulsa <strong>Jugar</strong> y coloca tu nombre.</p>
+                <p>2. Muévete con flechas para esquivar disparos.</p>
+                <p>3. Dispara con espacio y elimina enemigos para llenar el contador del nivel.</p>
+                <p>4. Recoge corazones para recuperar vidas.</p>
+                <p>5. Cuando aparece la alerta de jefe, prepárate: tendrá más vida y ataque.</p>
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>
