@@ -28,6 +28,215 @@ var game = (function () {
     var enemyImages = [], bossImages = [], enemyKilledImage, bossKilledImage;
 
     var player = null;
+    
+    // ==================== AUDIO MANAGER ====================
+    const AudioManager = {
+        currentMusic: null,
+        musicMap: {},
+        sfxMap: {},
+        musicEnabled: true,
+        sfxEnabled: true,
+        sfxVolume: 0.7,
+        musicVolume: 0.5,
+
+        init() {
+            // Initialize music mappings
+            this.musicMap = {
+                "bg_menu": "sounds/bg_menu.mp3",
+                "bg_gameplay": "sounds/bg_gameplay.mp3",
+                "bg_boss": "sounds/bg_boss.mp3",
+                "bg_victory": "sounds/bg_victory.mp3",
+                "bg_gameover": "sounds/bg_gameover.mp3"
+            };
+
+            // Initialize SFX mappings
+            this.sfxMap = {
+                "player_shoot": "sounds/player_shoot.wav",
+                "enemy_shoot": "sounds/enemy_shoot.wav",
+                "hit_enemy": "sounds/hit_enemy.wav",
+                "hit_player": "sounds/hit_player.wav",
+                "explosion_small": "sounds/explosion_small.wav",
+                "explosion_big": "sounds/explosion_big.wav",
+                "powerup_pick": "sounds/powerup_pick.wav",
+                "heal": "sounds/heal.wav",
+                "shield_on": "sounds/shield_on.wav",
+                "menu_move": "sounds/menu_move.wav",
+                "menu_select": "sounds/menu_select.wav",
+                "game_start": "sounds/game_start.wav",
+                "boss_warning": "sounds/boss_warning.wav",
+                "wave_transition": "sounds/wave_transition.wav"
+            };
+
+            // Preload audio files
+            this.preloadAudio();
+        },
+
+        preloadAudio() {
+            // Preload music files
+            for (let key in this.musicMap) {
+                const audio = new Audio();
+                audio.src = this.musicMap[key];
+                audio.loop = true;
+                audio.volume = this.musicVolume;
+                audio.preload = "auto";
+                this.musicMap[key] = audio;
+            }
+
+            // Preload SFX files
+            for (let key in this.sfxMap) {
+                const audio = new Audio();
+                audio.src = this.sfxMap[key];
+                audio.volume = this.sfxVolume;
+                audio.preload = "auto";
+                this.sfxMap[key] = audio;
+            }
+        },
+
+        playMusic(name) {
+            if (!this.musicEnabled || !this.musicMap[name]) return;
+
+            // Stop current music
+            this.stopMusic();
+
+            // Play new music
+            const music = this.musicMap[name];
+            if (music) {
+                music.currentTime = 0;
+                music.volume = this.musicVolume;
+                music.play().catch(e => console.log("Music play failed:", e));
+                this.currentMusic = music;
+            }
+        },
+
+        stopMusic() {
+            if (this.currentMusic) {
+                this.currentMusic.pause();
+                this.currentMusic.currentTime = 0;
+                this.currentMusic = null;
+            }
+        },
+
+        playSfx(name) {
+            if (!this.sfxEnabled || !this.sfxMap[name]) return;
+
+            const sfx = this.sfxMap[name];
+            if (sfx) {
+                // Clone the audio to allow simultaneous playback
+                const sfxClone = sfx.cloneNode();
+                sfxClone.volume = this.sfxVolume;
+                sfxClone.currentTime = 0;
+                sfxClone.play().catch(e => console.log("SFX play failed:", e));
+            }
+        },
+
+        setMusicVolume(volume) {
+            this.musicVolume = Math.max(0, Math.min(1, volume));
+            if (this.currentMusic) {
+                this.currentMusic.volume = this.musicVolume;
+            }
+        },
+
+        setSfxVolume(volume) {
+            this.sfxVolume = Math.max(0, Math.min(1, volume));
+            // Update volume for all SFX
+            for (let key in this.sfxMap) {
+                if (this.sfxMap[key] && this.sfxMap[key].volume !== undefined) {
+                    this.sfxMap[key].volume = this.sfxVolume;
+                }
+            }
+        },
+
+        toggleMusic() {
+            this.musicEnabled = !this.musicEnabled;
+            if (!this.musicEnabled) {
+                this.stopMusic();
+            }
+            return this.musicEnabled;
+        },
+
+        toggleSfx() {
+            this.sfxEnabled = !this.sfxEnabled;
+            return this.sfxEnabled;
+        },
+
+        // Context-aware audio methods
+        playMenuMusic() {
+            this.playMusic("bg_menu");
+        },
+
+        playGameplayMusic() {
+            this.playMusic("bg_gameplay");
+        },
+
+        playBossMusic() {
+            this.playMusic("bg_boss");
+        },
+
+        playVictoryMusic() {
+            this.playMusic("bg_victory");
+        },
+
+        playGameOverMusic() {
+            this.playMusic("bg_gameover");
+        },
+
+        // Game-specific SFX methods
+        playPlayerShoot() {
+            this.playSfx("player_shoot");
+        },
+
+        playEnemyShoot() {
+            this.playSfx("enemy_shoot");
+        },
+
+        playHitEnemy() {
+            this.playSfx("hit_enemy");
+        },
+
+        playHitPlayer() {
+            this.playSfx("hit_player");
+        },
+
+        playExplosionSmall() {
+            this.playSfx("explosion_small");
+        },
+
+        playExplosionBig() {
+            this.playSfx("explosion_big");
+        },
+
+        playPowerUpPick() {
+            this.playSfx("powerup_pick");
+        },
+
+        playHeal() {
+            this.playSfx("heal");
+        },
+
+        playShieldOn() {
+            this.playSfx("shield_on");
+        },
+
+        playMenuMove() {
+            this.playSfx("menu_move");
+        },
+
+        playMenuSelect() {
+            this.playSfx("menu_select");
+        },
+
+        playGameStart() {
+            this.playSfx("game_start");
+        },
+
+        playBossWarning() {
+            this.playSfx("boss_warning");
+        },
+
+        playWaveTransition() {
+            this.playSfx("wave_transition");
+        }
+    };
     var enemies = [];
     var playerShots = [];
     var enemyShots = [];
@@ -269,6 +478,9 @@ var game = (function () {
         this.readyMessage = "";
         this.readyUntil = 0;
         gameState = GAME_STATE.MENU;
+        
+        // Play menu music when screen activates
+        AudioManager.playMenuMusic();
     };
 
     StartScreen.prototype.playIntro = function () {
@@ -630,9 +842,14 @@ var game = (function () {
 
     StartScreen.prototype.changeSelection = function (dir) {
         this.selected = (this.selected + dir + this.menu.length) % this.menu.length;
+        // Play menu move sound
+        AudioManager.playMenuMove();
     };
 
     StartScreen.prototype.activateSelection = function () {
+        // Play menu select sound
+        AudioManager.playMenuSelect();
+        
         if (this.menu[this.selected] === "PLAY") {
             if (isFirstStart) {
                 this.playIntro();
@@ -1347,6 +1564,17 @@ var game = (function () {
         killsTargetInLevel = cfg ? cfg.enemyCount : 1;
         waveState = "announce";
         waveAnnouncementStart = Date.now();
+        
+        // Play wave transition sound
+        AudioManager.playWaveTransition();
+        
+        // Check if this is a boss wave and play boss music
+        if (cfg && cfg.boss) {
+            AudioManager.playBossWarning();
+            setTimeout(function() {
+                AudioManager.playBossMusic();
+            }, 2000); // Wait for warning sound to finish
+        }
     }
 
     function spawnRemainingEnemies(count) {
@@ -1647,6 +1875,10 @@ var game = (function () {
         pauseSelection = 0;
         keyPressed = {};
         hideEndOverlay();
+        
+        // Play game start sound and switch to gameplay music
+        AudioManager.playGameStart();
+        AudioManager.playGameplayMusic();
     }
 
     function restartCurrentLevel() {
@@ -2241,6 +2473,9 @@ var game = (function () {
     function firePlayerShot(vx) {
         var pw = spriteW(player.image, player.w);
         playerShots.push({ x: player.posX + pw / 2 - 4, y: player.posY, speed: 7.5, vx: vx || 0, img: playerShotImage });
+        
+        // Play player shoot sound
+        AudioManager.playPlayerShoot();
     }
 
     function playerAction() {
@@ -2351,6 +2586,8 @@ var game = (function () {
             var hit = p.x < player.posX + pw && p.x + p.w > player.posX && p.y < player.posY + ph && p.y + p.h > player.posY;
             if (hit) {
                 activatePowerUp(p.type);
+                // Play power-up pickup sound
+                AudioManager.playPowerUpPick();
                 powerUpDrops.splice(i, 1);
             } else if (p.y > canvas.height + 24) {
                 powerUpDrops.splice(i, 1);
@@ -2366,7 +2603,11 @@ var game = (function () {
             bufferctx.drawImage(heartImage, h.x, h.y, h.w, h.h);
             var hit = h.x < player.posX + pw && h.x + h.w > player.posX && h.y < player.posY + ph && h.y + h.h > player.posY;
             if (hit) {
-                if (player.life < MAX_LIVES) { player.life += 1; }
+                if (player.life < MAX_LIVES) { 
+                    player.life += 1;
+                    // Play heal sound
+                    AudioManager.playHeal();
+                }
                 heartDrops.splice(i, 1);
             } else if (h.y > canvas.height + 30) {
                 heartDrops.splice(i, 1);
@@ -2419,6 +2660,9 @@ var game = (function () {
                     } else if (e.life <= 0) {
                         // Regular enemy death
                         e.dead = true;
+                        
+                        // Play enemy hit sound
+                        AudioManager.playHitEnemy();
                         
                         // Update combo and calculate score with multiplier
                         increaseCombo();
@@ -2486,10 +2730,17 @@ var game = (function () {
 
     function hurtPlayer() {
         if (player.dead || gameOver) { return; }
-        if (isPowerUpActive("shield")) { return; }
+        if (isPowerUpActive("shield")) { 
+            // Play shield activation sound
+            AudioManager.playShieldOn();
+            return; 
+        }
         
         // Screen shake when player takes damage
         startScreenShake(8, 300); // Medium shake for 300ms
+        
+        // Play player hit sound
+        AudioManager.playHitPlayer();
         
         // Reset combo when player takes damage
         combo.count = 0;
@@ -2705,6 +2956,13 @@ var game = (function () {
         saveFinalScore(total);
         var detail = win ? "Excelente. Superaste el reto." : "Te quedaste sin vidas. Intenta de nuevo.";
         showGameOverOverlay(win ? "Victoria" : "Game Over", detail, "Puntos: " + total + " | Nivel alcanzado: " + level);
+        
+        // Play appropriate end game music
+        if (win) {
+            AudioManager.playVictoryMusic();
+        } else {
+            AudioManager.playGameOverMusic();
+        }
     }
 
     function keyDown(e) {
@@ -2755,6 +3013,10 @@ var game = (function () {
         buffer.height = canvas.height;
         bufferctx = buffer.getContext("2d");
         initParallaxStars();
+        
+        // Initialize Audio Manager
+        AudioManager.init();
+        
         startScreen = new StartScreen(canvas, bufferctx, startGame);
         bindUI();
         showBestScores();
