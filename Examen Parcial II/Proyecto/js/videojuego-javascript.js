@@ -18,7 +18,7 @@ var game = (function () {
     var bgScrollY = 0;
     var starsParallax = [];
     var BG_ASSET_W = 1168;
-    var BG_ASSET_H = 764;
+    var BG_ASSET_H = 784;
     var lastScoreValue = 0;
     var scoreJitterUntil = 0;
     var levelStatusUntil = 0;
@@ -47,11 +47,14 @@ var game = (function () {
     var levelMaxEnemiesAlive = 1;
     var sessionActive = false;
     var gameOver = false;
+    var paused = false;
     var overlayShown = false;
     var startScreen = null;
     var gameState = GAME_STATE.SPLASH;
     var isFirstStart = true;
     var playerName = "jugador";
+    var pauseOptions = ["REINICIAR NIVEL", "PANTALLA INICIAL"];
+    var pauseSelection = 0;
     function getPlayerName() {
         var n = localStorage.getItem(STORAGE_NAME);
         if (n && n.replace(/\s/g, "").length) {
@@ -727,7 +730,33 @@ var game = (function () {
         configLevel();
         sessionActive = true;
         gameState = GAME_STATE.PLAYING;
+        paused = false;
+        pauseSelection = 0;
+        keyPressed = {};
         hideEndOverlay();
+    }
+
+    function restartCurrentLevel() {
+        var keepScore = player ? player.score : 0;
+        player = new Player();
+        player.score = keepScore;
+        player.life = 3;
+        gameOver = false;
+        overlayShown = false;
+        paused = false;
+        fireLock = false;
+        nextPlayerShot = 0;
+        keyPressed = {};
+        configLevel();
+        hideEndOverlay();
+    }
+
+    function backToStartMenu() {
+        paused = false;
+        sessionActive = false;
+        keyPressed = {};
+        hideEndOverlay();
+        if (startScreen) { startScreen.activate(); }
     }
 
     function showGameOverOverlay(title, detail, points) {
@@ -763,9 +792,9 @@ var game = (function () {
         }
         if (btnRestart) {
             btnRestart.addEventListener("click", function () {
-                sessionActive = false;
                 hideEndOverlay();
-                if (startScreen) { startScreen.activate(); }
+                // Restart immediately at level 1, skipping start/menu flow.
+                startGame();
             });
         }
         if (btnSaveName && inputName) { btnSaveName.addEventListener("click", function () { setPlayerName(inputName.value); }); }
@@ -794,9 +823,13 @@ var game = (function () {
             if (enemies[i].isBoss && !enemies[i].dead) { bossAlive = true; break; }
         }
         var bg = bossAlive || isBossLevel() ? bgBoss : bgMain;
-        var scale = canvas.width / BG_ASSET_W;
-        var drawH = BG_ASSET_H * scale;
-        var yOffset = (bgScrollY / BG_ASSET_H) * drawH;
+        var assetW = (bg && bg.naturalWidth) ? bg.naturalWidth : BG_ASSET_W;
+        var assetH = (bg && bg.naturalHeight) ? bg.naturalHeight : BG_ASSET_H;
+        var scale = canvas.width / assetW;
+        var drawH = assetH * scale;
+        if (drawH <= 0) { drawH = canvas.height; }
+        if (bgScrollY >= drawH) { bgScrollY = bgScrollY % drawH; }
+        var yOffset = bgScrollY;
         if (bg && bg.complete && bg.naturalWidth > 0) {
             bufferctx.drawImage(bg, 0, yOffset, canvas.width, drawH);
             bufferctx.drawImage(bg, 0, yOffset - drawH, canvas.width, drawH);
@@ -807,8 +840,10 @@ var game = (function () {
             bufferctx.fillStyle = bossAlive || isBossLevel() ? "#140b12" : "#0b1d34";
             bufferctx.fillRect(0, 0, canvas.width, canvas.height);
         }
-        bgScrollY += 0.5;
-        if (bgScrollY >= BG_ASSET_H) { bgScrollY = 0; }
+        // Increase map motion speed as kills go up for more tension.
+        var dynamicScrollSpeed = 0.5 + Math.min(2.2, enemiesKilled * 0.03);
+        bgScrollY += dynamicScrollSpeed;
+        if (bgScrollY >= drawH) { bgScrollY = 0; }
 
         for (i = 0; i < starsParallax.length; i++) {
             var s = starsParallax[i];
@@ -913,6 +948,56 @@ var game = (function () {
             bufferctx.fillText("LEVEL CLEARED!", 210, 36);
         }
         bufferctx.restore();
+    }
+
+    function drawPauseOverlay() {
+        var c = bufferctx;
+        var w = canvas.width;
+        var h = canvas.height;
+        var panelW = 520;
+        var panelH = 280;
+        var x = (w - panelW) / 2;
+        var y = (h - panelH) / 2;
+        var pulse = 0.55 + Math.abs(Math.sin(Date.now() * 0.006)) * 0.45;
+
+        c.save();
+        c.fillStyle = "rgba(0,0,0,0.62)";
+        c.fillRect(0, 0, w, h);
+
+        c.fillStyle = "rgba(5,15,25,0.93)";
+        c.fillRect(x, y, panelW, panelH);
+        c.strokeStyle = "#00ff00";
+        c.lineWidth = 3;
+        c.shadowBlur = 16;
+        c.shadowColor = "#00ff00";
+        c.strokeRect(x, y, panelW, panelH);
+
+        c.textAlign = "center";
+        c.fillStyle = "#00ff00";
+        c.font = "26px 'Press Start 2P', monospace";
+        c.globalAlpha = pulse;
+        c.fillText("PAUSA", w / 2, y + 56);
+        c.globalAlpha = 1;
+
+        for (var i = 0; i < pauseOptions.length; i++) {
+            var oy = y + 130 + i * 58;
+            var selected = i === pauseSelection;
+            c.font = "14px 'Press Start 2P', monospace";
+            c.fillStyle = selected ? "#ffffff" : "#00ff88";
+            if (selected) {
+                c.strokeStyle = "#00ff00";
+                c.lineWidth = 2;
+                c.strokeRect(x + 62, oy - 28, panelW - 124, 42);
+                c.fillText("> " + pauseOptions[i] + " <", w / 2, oy);
+            } else {
+                c.fillText(pauseOptions[i], w / 2, oy);
+            }
+        }
+
+        c.font = "10px 'Press Start 2P', monospace";
+        c.fillStyle = "#9aff9a";
+        c.fillText("P: CONTINUAR | ENTER: ACEPTAR", w / 2, y + panelH - 28);
+        c.restore();
     }
 
     function initParallaxStars() {
@@ -1080,6 +1165,12 @@ var game = (function () {
             return;
         }
         drawBackground();
+        if (paused) {
+            drawHud();
+            drawPauseOverlay();
+            draw();
+            return;
+        }
         if (gameOver) { draw(); return; }
         spawnEnemiesIfNeeded();
         playerAction();
@@ -1179,6 +1270,24 @@ var game = (function () {
             e.preventDefault();
             return;
         }
+        if (sessionActive && !gameOver && key === 80) {
+            e.preventDefault();
+            paused = !paused;
+            keyPressed = {};
+            return;
+        }
+        if (paused) {
+            if (key === 38) { e.preventDefault(); pauseSelection = (pauseSelection + pauseOptions.length - 1) % pauseOptions.length; return; }
+            if (key === 40) { e.preventDefault(); pauseSelection = (pauseSelection + 1) % pauseOptions.length; return; }
+            if (key === 13 || key === 108) {
+                e.preventDefault();
+                if (pauseSelection === 0) { restartCurrentLevel(); } else { backToStartMenu(); }
+                return;
+            }
+            if (key === 82) { e.preventDefault(); restartCurrentLevel(); return; } // R quick restart level
+            if (key === 73 || key === 77) { e.preventDefault(); backToStartMenu(); return; } // I/M back to menu
+            return;
+        }
         for (var k in keyMap) {
             if (key === keyMap[k]) { e.preventDefault(); keyPressed[k] = true; }
         }
@@ -1211,6 +1320,24 @@ var game = (function () {
             var rect = canvas.getBoundingClientRect();
             var px = ev.clientX - rect.left;
             var py = ev.clientY - rect.top;
+            if (paused) {
+                var panelW = 520;
+                var panelH = 280;
+                var x = (canvas.width - panelW) / 2;
+                var y = (canvas.height - panelH) / 2;
+                var firstTop = y + 102;
+                var boxH = 42;
+                var boxW = panelW - 124;
+                for (var i = 0; i < pauseOptions.length; i++) {
+                    var by = firstTop + i * 58;
+                    if (px >= x + 62 && px <= x + 62 + boxW && py >= by && py <= by + boxH) {
+                        pauseSelection = i;
+                        if (i === 0) { restartCurrentLevel(); } else { backToStartMenu(); }
+                        return;
+                    }
+                }
+                return;
+            }
             startScreen.handleClick(px, py);
         });
         document.addEventListener("keydown", keyDown);
