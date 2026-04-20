@@ -32,6 +32,7 @@ var game = (function () {
     var playerShots = [];
     var enemyShots = [];
     var heartDrops = [];
+    var powerUpDrops = [];
     var deathEffects = [];
 
     var keyPressed = {};
@@ -42,6 +43,13 @@ var game = (function () {
 
     var level = 1;
     var enemiesKilled = 0;
+    var currentWave = 0;
+    var totalWaves = 5;
+    var waves = [];
+    var waveState = "idle"; // idle | announce | fight | transition | completed
+    var waveAnnouncementStart = 0;
+    var waveAnnouncementDuration = 2000;
+    var waveTransitionUntil = 0;
     var killsInLevel = 0;
     var killsTargetInLevel = 8;
     var levelMaxEnemiesAlive = 1;
@@ -55,6 +63,12 @@ var game = (function () {
     var playerName = "jugador";
     var pauseOptions = ["REINICIAR NIVEL", "PANTALLA INICIAL"];
     var pauseSelection = 0;
+    var activePowerUps = { triple: 0, shield: 0, speed: 0 };
+    var powerUpDurations = { triple: 8000, shield: 5000, speed: 6000 };
+
+    var formationOffsetX = 0;
+    var formationDir = 1;
+    var formationSpeed = 1;
     function getPlayerName() {
         var n = localStorage.getItem(STORAGE_NAME);
         if (n && n.replace(/\s/g, "").length) {
@@ -677,7 +691,9 @@ var game = (function () {
         this.phaseTick = 0;
         this.life = this.isBoss ? (8 + level * 2) : (2 + Math.floor(level / 2));
         this.pointsToKill = this.isBoss ? (40 + level * 7) : (6 + level * 2);
-        this.shotCooldown = 40 + rand(140);
+        //this.shotCooldown = 40 + rand(140);
+        this.spawnTime = Date.now();
+        this.shootDelay = 1200 + rand(800);
     }
 
     Enemy.prototype.update = function () {
@@ -699,14 +715,206 @@ var game = (function () {
             this.frame = (this.frame + 1) % 8;
             this.image = this.imageSet[this.frame];
         }
-        this.shotCooldown--;
+       /* this.shotCooldown--;
         if (this.shotCooldown <= 0) {
-            this.shotCooldown = (this.isBoss ? 28 : 55) + rand(120) - Math.min(level * 2, 20);
+            var baseCooldown = typeof this.customShootInterval === "number"
+                ? this.customShootInterval
+                : ((this.isBoss ? 28 : 55) + rand(120) - Math.min(level * 2, 20));
+            this.shotCooldown = Math.max(14, baseCooldown);
             enemyShots.push({ x: this.posX + this.w / 2 - 4, y: this.posY + this.h, speed: 3.2 + level * 0.1, img: enemyShotImage });
         }
-    };
+    };*/
+        // 🔥 Delay inicial antes de disparar (evita daño injusto)
+        if (!this.spawnTime) {
+            this.spawnTime = Date.now();
+            this.shootDelay = 700 + rand(800); // 1.2s a 2s
+           }
 
-    function isBossLevel() { return level % 3 === 0; }
+//  no dispara inmediatamente al aparecer
+        if (Date.now() - this.spawnTime < this.shootDelay) {
+            return;
+         }
+
+        this.shotCooldown--;
+
+        if (this.shotCooldown <= 0) {
+
+            var baseCooldown = typeof this.customShootInterval === "number"
+                ? this.customShootInterval
+                : ((this.isBoss ? 40 : 80) + rand(100)); // más lento
+
+    // 🔥 SOLO algunos enemigos disparan
+            if (Math.random() < 0.3) { // 30% probabilidad
+
+               enemyShots.push({
+                   x: this.posX + this.w / 2 - 4,
+                   y: this.posY + this.h,
+                   speed: 3.2 + level * 0.1,
+                   img: enemyShotImage
+        });
+    }
+
+            this.shotCooldown = Math.max(25, baseCooldown);
+        }
+    }
+
+    function isBossLevel() { return currentWave === totalWaves; }
+
+    function initWaves() {
+        waves = [];
+        var patterns = ["grid", "v-shape", "diagonal"];
+        for (var i = 1; i <= totalWaves; i++) {
+            if (i === totalWaves) {
+                waves.push({
+                    enemyCount: 1,
+                    enemySpeed: 1.6,
+                    shootInterval: 40,
+                    formationPattern: "v-shape",
+                    boss: true
+                });
+            } else {
+                waves.push({
+                    enemyCount: 6 + ((i - 1) * 2),
+                    enemySpeed: 0.9 + (i * 0.18),
+                    shootInterval: Math.max(38, 112 - (i * 14)),
+                    formationPattern: patterns[(i - 1) % patterns.length],
+                    boss: false
+                });
+            }
+        }
+    }
+
+    function getCurrentWaveConfig() {
+        return waves[Math.max(0, currentWave - 1)];
+    }
+
+    function beginWave(waveNumber) {
+        currentWave = waveNumber;
+        level = waveNumber;
+        killsInLevel = 0;
+        enemies.length = 0;
+        enemyShots.length = 0;
+        playerShots.length = 0;
+        heartDrops.length = 0;
+        powerUpDrops.length = 0;
+        bgScrollY = 0;
+        var cfg = getCurrentWaveConfig();
+        killsTargetInLevel = cfg ? cfg.enemyCount : 1;
+        waveState = "announce";
+        waveAnnouncementStart = Date.now();
+    }
+
+    function spawnRemainingEnemies(count) {
+        var cfg = getCurrentWaveConfig();
+        if (!cfg) return;
+    
+        for (var i = 0; i < count; i++) {
+    
+            var e = new Enemy(cfg.boss);
+    
+            // spawn arriba
+            e.posX = rand(Math.max(1, canvas.width - e.w));
+            e.posY = -rand(200) - 40;
+    
+            // velocidad base
+            e.downSpeed = cfg.enemySpeed;
+            e.hSpeed = 1 + (cfg.enemySpeed * 0.6);
+    
+            // movimiento lateral tipo formación
+            e.baseX = e.posX;
+            e.waveOffset = Math.random() * Math.PI * 2;
+            e.waveSpeed = 0.02 + (currentWave * 0.002);
+    
+            // disparo controlado
+            e.customShootInterval = cfg.shootInterval;
+    
+            // delay antes de disparar (clave)
+            e.initialDelay = 60 + rand(60);
+            e.shotCooldown = e.initialDelay;
+    
+            enemies.push(e);
+        }
+    }
+    function spawnWaveEnemies() {
+        var cfg = getCurrentWaveConfig();
+        if (!cfg) { return; }
+        enemies.length = 0;
+        if (cfg.boss) {
+            var boss = new Enemy(true);
+            boss.posX = (canvas.width - boss.w) / 2;
+            boss.posY = -boss.h - 20;
+            boss.downSpeed = cfg.enemySpeed * 0.75;
+            boss.hSpeed = 1.2 + currentWave * 0.12;
+            boss.customShootInterval = cfg.shootInterval;
+            boss.shotCooldown = cfg.shootInterval;
+            enemies.push(boss);
+            return;
+        }
+        var count = cfg.enemyCount;
+        var centerX = canvas.width / 2;
+        var baseY = -70;
+        var spacingX = 86;
+        var spacingY = 64;
+        for (var i = 0; i < count; i++) {
+            var e = new Enemy(false);
+            var col, row;
+            if (cfg.formationPattern === "grid") {
+                col = i % 4;
+                row = Math.floor(i / 4);
+                e.posX = 120 + (col * spacingX);
+                e.posY = baseY - (row * spacingY);
+            } else if (cfg.formationPattern === "v-shape") {
+                var offset = i - Math.floor(count / 2);
+                e.posX = centerX + (offset * 42);
+                e.posY = baseY - (Math.abs(offset) * 20);
+            } else {
+                e.posX = 90 + (i * 56);
+                e.posY = baseY - (i * 28);
+            }
+            e.downSpeed = cfg.enemySpeed;
+            e.hSpeed = 1 + (cfg.enemySpeed * 0.75);
+            e.customShootInterval = cfg.shootInterval;
+            e.shotCooldown = cfg.shootInterval + rand(40);
+            enemies.push(e);
+        }
+    }
+
+    function updateWaveSystem() {
+        var now = Date.now();
+        if (waveState === "announce") {
+            if (now - waveAnnouncementStart >= waveAnnouncementDuration) {
+                spawnWaveEnemies();
+                waveState = "fight";
+            }
+            return;
+        }
+        if (waveState === "fight") {
+
+            // 🔥 RESPWAN SI NO HAY ENEMIGOS Y FALTAN KILLS
+            if (enemies.length === 0 && killsInLevel < killsTargetInLevel) {
+        
+                var missing = killsTargetInLevel - killsInLevel;
+        
+                spawnRemainingEnemies(missing);
+        
+                return;
+            }
+        
+            // ✔ avanzar normalmente
+            if (killsInLevel >= killsTargetInLevel && enemies.length === 0) {
+                if (currentWave >= totalWaves) {
+                    waveState = "completed";
+                    finishGame(true, player.score);
+                } else {
+                    waveState = "transition";
+                    waveTransitionUntil = now + 2000;
+                }
+            }
+        }
+        if (waveState === "transition" && now >= waveTransitionUntil) {
+            beginWave(currentWave + 1);
+        }
+    }
 
     function configLevel() {
         killsInLevel = 0;
@@ -714,8 +922,10 @@ var game = (function () {
         enemyShots.length = 0;
         playerShots.length = 0;
         heartDrops.length = 0;
-        killsTargetInLevel = isBossLevel() ? 1 : (8 + level * 2);
-        levelMaxEnemiesAlive = isBossLevel() ? 1 : Math.min(3, 1 + Math.floor(level / 2));
+        powerUpDrops.length = 0;
+        var cfg = getCurrentWaveConfig();
+        killsTargetInLevel = cfg ? cfg.enemyCount : 1;
+        levelMaxEnemiesAlive = cfg && !cfg.boss ? Math.min(5, 2 + Math.floor(currentWave / 2)) : 1;
         bgScrollY = 0;
     }
 
@@ -727,7 +937,9 @@ var game = (function () {
         overlayShown = false;
         fireLock = false;
         nextPlayerShot = 0;
-        configLevel();
+        currentWave = 0;
+        initWaves();
+        beginWave(1);
         sessionActive = true;
         gameState = GAME_STATE.PLAYING;
         paused = false;
@@ -911,10 +1123,11 @@ var game = (function () {
         bufferctx.fillText("KILLS:" + enemiesKilled, x, y + rowGap * 2);
         var lvl = level < 10 ? ("0" + level) : String(level);
         bufferctx.fillText("LEVEL:" + lvl, x, y + rowGap * 3);
+        bufferctx.fillText("WAVE: " + currentWave + "/" + totalWaves, x, y + rowGap * 4);
 
         // PROGRESS segmented bar
         var barX = x;
-        var barY = y + rowGap * 4 + 1;
+        var barY = y + rowGap * 5 + 1;
         var barW = 124;
         var barH = 12;
         var segments = 10;
@@ -947,6 +1160,45 @@ var game = (function () {
             bufferctx.font = "14px 'Press Start 2P', monospace";
             bufferctx.fillText("LEVEL CLEARED!", 210, 36);
         }
+
+        // Active power-ups HUD bottom-left.
+        var px = 60;
+        var py = canvas.height - 78;
+        bufferctx.shadowBlur = 0;
+        bufferctx.font = "9px 'Press Start 2P', monospace";
+        bufferctx.fillStyle = "#9aff9a";
+        function drawPowerLine(label, key, color) {
+            if (!isPowerUpActive(key)) { return; }
+            var ms = activePowerUps[key] - now;
+            var secs = Math.max(0, Math.ceil(ms / 1000));
+            bufferctx.fillStyle = color;
+            bufferctx.fillText(label + ": " + secs + "s", px, py);
+            py += 18;
+        }
+        drawPowerLine("TRIPLE", "triple", "#70e7ff");
+        drawPowerLine("SHIELD", "shield", "#ffe98c");
+        drawPowerLine("SPEED", "speed", "#7bff9f");
+        bufferctx.restore();
+    }
+
+    function drawWaveAnnouncement() {
+        if (waveState !== "announce") { return; }
+        var elapsed = Date.now() - waveAnnouncementStart;
+        var alpha = 1;
+        var half = waveAnnouncementDuration / 2;
+        if (elapsed < half) {
+            alpha = elapsed / half;
+        } else {
+            alpha = Math.max(0, (waveAnnouncementDuration - elapsed) / half);
+        }
+        bufferctx.save();
+        bufferctx.globalAlpha = alpha;
+        bufferctx.textAlign = "center";
+        bufferctx.fillStyle = "#00ff88";
+        bufferctx.shadowBlur = 16;
+        bufferctx.shadowColor = "#00ff88";
+        bufferctx.font = "30px 'Press Start 2P', monospace";
+        bufferctx.fillText("WAVE " + currentWave, canvas.width / 2, canvas.height / 2);
         bufferctx.restore();
     }
 
@@ -1012,31 +1264,123 @@ var game = (function () {
         }
     }
 
+    function firePlayerShot(vx) {
+        var pw = spriteW(player.image, player.w);
+        playerShots.push({ x: player.posX + pw / 2 - 4, y: player.posY, speed: 7.5, vx: vx || 0, img: playerShotImage });
+    }
+
     function playerAction() {
         var pw = spriteW(player.image, player.w);
-        if (keyPressed.left && player.posX > 5) { player.posX -= player.speed; }
-        if (keyPressed.right && player.posX < (canvas.width - pw - 5)) { player.posX += player.speed; }
+        var moveSpeed = isPowerUpActive("speed") ? (player.speed * 2) : player.speed;
+        if (keyPressed.left && player.posX > 5) { player.posX -= moveSpeed; }
+        if (keyPressed.right && player.posX < (canvas.width - pw - 5)) { player.posX += moveSpeed; }
         if (keyPressed.fire && !fireLock) {
             var now = Date.now();
             if (now >= nextPlayerShot) {
                 nextPlayerShot = now + playerShotDelay;
-                playerShots.push({ x: player.posX + pw / 2 - 4, y: player.posY, speed: 7.5, img: playerShotImage });
+                if (isPowerUpActive("triple")) {
+                    firePlayerShot(-1.8);
+                    firePlayerShot(0);
+                    firePlayerShot(1.8);
+                } else {
+                    firePlayerShot(0);
+                }
                 fireLock = true;
             }
         }
     }
 
     function spawnEnemiesIfNeeded() {
-        if (killsInLevel >= killsTargetInLevel) { return; }
-        while (enemies.length < levelMaxEnemiesAlive && (killsInLevel + enemies.length) < killsTargetInLevel) {
-            enemies.push(new Enemy(isBossLevel()));
-        }
+        // Wave system now controls all enemy spawning.
     }
 
     function maybeDropHeart(x, y) {
         if (Math.random() < 0.18) {
             var targetX = Math.max(8, Math.min(canvas.width - 30, x));
             heartDrops.push({ x: targetX, y: -24, speed: 2.1 + Math.random() * 1.1, w: 22, h: 22 });
+        }
+    }
+
+    function maybeDropPowerUp(x, y) {
+        if (Math.random() > 0.20) { return; }
+        var types = ["triple", "shield", "speed"];
+        var type = types[rand(types.length)];
+        powerUpDrops.push({
+            type: type,
+            x: Math.max(12, Math.min(canvas.width - 32, x)),
+            y: y,
+            w: 20,
+            h: 20,
+            speed: 2
+        });
+    }
+
+    function activatePowerUp(type) {
+        activePowerUps[type] = Date.now() + powerUpDurations[type];
+    }
+
+    function isPowerUpActive(type) {
+        return activePowerUps[type] > Date.now();
+    }
+
+    function drawPowerUpDrop(p) {
+        var c = bufferctx;
+        if (p.type === "triple") {
+            c.fillStyle = "#00d4ff";
+            c.beginPath();
+            c.moveTo(p.x + p.w / 2, p.y);
+            c.lineTo(p.x + p.w, p.y + p.h);
+            c.lineTo(p.x, p.y + p.h);
+            c.closePath();
+            c.fill();
+            c.fillStyle = "#a7f3ff";
+            c.font = "8px 'Press Start 2P', monospace";
+            c.textAlign = "center";
+            c.fillText("3X", p.x + p.w / 2, p.y + p.h + 10);
+            return;
+        }
+        if (p.type === "shield") {
+            c.strokeStyle = "#ffe66b";
+            c.lineWidth = 2;
+            c.beginPath();
+            c.arc(p.x + p.w / 2, p.y + p.h / 2, 8, 0, Math.PI * 2);
+            c.stroke();
+            c.fillStyle = "#fff2ad";
+            c.font = "8px 'Press Start 2P', monospace";
+            c.textAlign = "center";
+            c.fillText("SH", p.x + p.w / 2, p.y + p.h + 10);
+            return;
+        }
+        c.fillStyle = "#00ff66";
+        c.beginPath();
+        c.moveTo(p.x + 2, p.y + p.h / 2);
+        c.lineTo(p.x + 11, p.y + p.h / 2);
+        c.lineTo(p.x + 11, p.y + 3);
+        c.lineTo(p.x + p.w - 1, p.y + p.h / 2);
+        c.lineTo(p.x + 11, p.y + p.h - 3);
+        c.lineTo(p.x + 11, p.y + p.h / 2);
+        c.lineTo(p.x + 2, p.y + p.h / 2);
+        c.closePath();
+        c.fill();
+        c.fillStyle = "#9affb7";
+        c.font = "8px 'Press Start 2P', monospace";
+        c.textAlign = "center";
+        c.fillText("SPD", p.x + p.w / 2, p.y + p.h + 10);
+    }
+
+    function updatePowerUps() {
+        var pw = spriteW(player.image, player.w), ph = spriteH(player.image, player.h);
+        for (var i = powerUpDrops.length - 1; i >= 0; i--) {
+            var p = powerUpDrops[i];
+            p.y += p.speed;
+            drawPowerUpDrop(p);
+            var hit = p.x < player.posX + pw && p.x + p.w > player.posX && p.y < player.posY + ph && p.y + p.h > player.posY;
+            if (hit) {
+                activatePowerUp(p.type);
+                powerUpDrops.splice(i, 1);
+            } else if (p.y > canvas.height + 24) {
+                powerUpDrops.splice(i, 1);
+            }
         }
     }
 
@@ -1076,7 +1420,8 @@ var game = (function () {
         for (var i = playerShots.length - 1; i >= 0; i--) {
             var s = playerShots[i];
             s.y -= s.speed;
-            if (s.y < -10) { playerShots.splice(i, 1); continue; }
+            s.x += s.vx || 0;
+            if (s.y < -10 || s.x < -12 || s.x > canvas.width + 12) { playerShots.splice(i, 1); continue; }
             var hitEnemy = false;
             for (var j = enemies.length - 1; j >= 0; j--) {
                 var e = enemies[j];
@@ -1090,6 +1435,7 @@ var game = (function () {
                         killsInLevel++;
                         deathEffects.push({ x: e.posX, y: e.posY, w: e.w, h: e.h, ttl: 18, img: e.killedImage });
                         maybeDropHeart(e.posX + e.w / 2 - 10, e.posY + e.h / 2 - 10);
+                        maybeDropPowerUp(e.posX + e.w / 2 - 10, e.posY + e.h / 2 - 10);
                         enemies.splice(j, 1);
                     }
                     break;
@@ -1117,6 +1463,7 @@ var game = (function () {
 
     function hurtPlayer() {
         if (player.dead || gameOver) { return; }
+        if (isPowerUpActive("shield")) { return; }
         player.dead = true;
         player.image = playerKilledImage;
         enemyShots.length = 0;
@@ -1137,11 +1484,7 @@ var game = (function () {
     }
 
     function advanceLevelIfNeeded() {
-        if (killsInLevel >= killsTargetInLevel && enemies.length === 0) {
-            levelStatusUntil = Date.now() + 1400;
-            level++;
-            configLevel();
-        }
+        updateWaveSystem();
     }
 
     function drawDeathEffects() {
@@ -1174,12 +1517,37 @@ var game = (function () {
         if (gameOver) { draw(); return; }
         spawnEnemiesIfNeeded();
         playerAction();
+        if (isPowerUpActive("speed")) {
+            bufferctx.fillStyle = "rgba(80,255,140,0.25)";
+            bufferctx.fillRect(player.posX + 12, player.posY + player.h - 4, 24, 12);
+        }
         bufferctx.drawImage(player.image, player.posX, player.posY);
+        if (isPowerUpActive("shield")) {
+            bufferctx.strokeStyle = "rgba(255,233,140,0.95)";
+            bufferctx.lineWidth = 2;
+            bufferctx.beginPath();
+            bufferctx.arc(player.posX + player.w / 2, player.posY + player.h / 2, Math.max(player.w, player.h) * 0.6 + Math.sin(Date.now() * 0.01) * 2, 0, Math.PI * 2);
+            bufferctx.stroke();
+        }
         updateEnemies();
         updateShots();
         drawDeathEffects();
         updateHearts();
+        updatePowerUps();
+        if (isPowerUpActive("triple")) {
+            var remain = activePowerUps.triple - Date.now();
+            var ratio = Math.max(0, Math.min(1, remain / powerUpDurations.triple));
+            var tw = 54;
+            var tx = player.posX + (player.w - tw) / 2;
+            var ty = player.posY + player.h + 8;
+            bufferctx.strokeStyle = "#70e7ff";
+            bufferctx.lineWidth = 1;
+            bufferctx.strokeRect(tx, ty, tw, 5);
+            bufferctx.fillStyle = "#70e7ff";
+            bufferctx.fillRect(tx + 1, ty + 1, Math.floor((tw - 2) * ratio), 3);
+        }
         advanceLevelIfNeeded();
+        drawWaveAnnouncement();
         drawHud();
         draw();
     }
