@@ -8,6 +8,7 @@ window.requestAnimFrame = (function () {
 })();
 
 var game = (function () {
+    var GAME_STATE = { SPLASH: 0, MENU: 1, PLAYING: 2, CREDITS: 3 };
     var STORAGE_SCORES = "invaders_high_scores_v2";
     var STORAGE_NAME = "invaders_player_name";
     var MAX_LIVES = 5;
@@ -48,9 +49,9 @@ var game = (function () {
     var gameOver = false;
     var overlayShown = false;
     var startScreen = null;
+    var gameState = GAME_STATE.SPLASH;
     var isFirstStart = true;
     var playerName = "jugador";
-
     function getPlayerName() {
         var n = localStorage.getItem(STORAGE_NAME);
         if (n && n.replace(/\s/g, "").length) {
@@ -125,6 +126,9 @@ var game = (function () {
     function StartScreen(canvasEl, ctxEl, startCallback) {
         this.animImage = new Image();
         this.animImage.src = "images/fondo_pantalla_inicio.jpg";
+        this.splashLogo = new Image();
+        this.splashLogo.onerror = function () { this.splashLogo.src = "images/Studio_Branding.jpeg"; }.bind(this);
+        this.splashLogo.src = "images/Studio_Branding.png";
         this.canvas = canvasEl;
         this.ctx = ctxEl;
         this.onStart = startCallback;
@@ -144,6 +148,10 @@ var game = (function () {
         this.introSceneStart = 0;
         this.introFadeMs = 1000;
         this.introSceneMs = 4200;
+        this.splashStartMs = Date.now();
+        this.splashTotalMs = 5000;
+        this.splashFadeInMs = 2500;
+        this.splashFadeOutMs = 1000;
         this.introSkipHint = "PRESS [S] TO SKIP STORY";
         
         this.introScenes = [
@@ -201,6 +209,7 @@ var game = (function () {
         this.nameInput = "";
         this.readyMessage = "";
         this.readyUntil = 0;
+        gameState = GAME_STATE.MENU;
     };
 
     StartScreen.prototype.playIntro = function () {
@@ -244,10 +253,50 @@ var game = (function () {
                 }
             }
         }
+        if (gameState === GAME_STATE.SPLASH) {
+            var splashElapsed = Date.now() - this.splashStartMs;
+            if (splashElapsed >= this.splashTotalMs) {
+                gameState = GAME_STATE.MENU;
+            }
+        }
         if (this.mode === "prepare" && Date.now() >= this.readyUntil) {
             this.active = false;
             if (typeof this.onStart === "function") { this.onStart(); }
         }
+        if (gameState === GAME_STATE.CREDITS && Date.now() > this.showCreditsUntil) {
+            gameState = GAME_STATE.MENU;
+        }
+    };
+
+    StartScreen.prototype.drawSplash = function () {
+        var c = this.ctx;
+        var w = this.canvas.width;
+        var h = this.canvas.height;
+        var elapsed = Date.now() - this.splashStartMs;
+        var alpha = 1;
+        if (elapsed <= this.splashFadeInMs) {
+            alpha = elapsed / this.splashFadeInMs;
+        } else if (elapsed >= this.splashTotalMs - this.splashFadeOutMs) {
+            alpha = Math.max(0, (this.splashTotalMs - elapsed) / this.splashFadeOutMs);
+        }
+        var logoW = 768;
+        var logoH = 768;
+        var x = (900 - 768) / 2;
+        var y = (600 - 768) / 2;
+
+        c.save();
+        c.globalAlpha = alpha;
+        if (this.splashLogo && this.splashLogo.complete && this.splashLogo.naturalWidth > 0) {
+            c.drawImage(this.splashLogo, x, y, logoW, logoH);
+        } else {
+            c.fillStyle = "rgba(0,255,120,0.20)";
+            c.fillRect(x, y, logoW, logoH);
+        }
+        c.textAlign = "center";
+        c.fillStyle = "#00FF00";
+        c.font = "14px " + this.font;
+        c.fillText("Arcade is not dead, it has evolved.", w * 0.5, y + logoH + 28);
+        c.restore();
     };
 
     StartScreen.prototype.drawNebula = function () {
@@ -495,6 +544,10 @@ var game = (function () {
             }
         }
         c.globalAlpha = 1;
+        if (gameState === GAME_STATE.SPLASH) {
+            this.drawSplash();
+            return;
+        }
         if (this.mode === "intro") {
             this.drawIntroScene();
             return;
@@ -531,10 +584,15 @@ var game = (function () {
             return;
         }
         this.showCreditsUntil = Date.now() + 2200;
+        gameState = GAME_STATE.CREDITS;
     };
 
     StartScreen.prototype.handleKeyDown = function (key) {
         if (!this.active) { return false; }
+        if (gameState === GAME_STATE.SPLASH) {
+            gameState = GAME_STATE.MENU;
+            return true;
+        }
         if (this.mode === "intro") {
             if (key === 83) {
                 this.openNameInput();
@@ -570,6 +628,7 @@ var game = (function () {
 
     StartScreen.prototype.handleClick = function (x, y) {
         if (!this.active) { return false; }
+        if (gameState === GAME_STATE.SPLASH) { return false; }
         var layout = this.getMenuLayout();
         var top = layout.y - 28;
         var widthHalf = 180;
@@ -667,6 +726,7 @@ var game = (function () {
         nextPlayerShot = 0;
         configLevel();
         sessionActive = true;
+        gameState = GAME_STATE.PLAYING;
         hideEndOverlay();
     }
 
