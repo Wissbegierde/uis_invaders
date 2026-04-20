@@ -44,7 +44,7 @@ var game = (function () {
     var level = 1;
     var enemiesKilled = 0;
     var currentWave = 0;
-    var totalWaves = 5;
+    var totalWaves = 1;
     var waves = [];
     var waveState = "idle"; // idle | announce | fight | transition | completed
     var waveAnnouncementStart = 0;
@@ -69,6 +69,35 @@ var game = (function () {
     var formationOffsetX = 0;
     var formationDir = 1;
     var formationSpeed = 1;
+    var activeFormationController = null;
+    var secondaryFormationControllers = []; // Fix: Declare as global array
+    
+    // Boss system variables
+    var bossHP = 0;
+    var bossMaxHP = 0;
+    var bossMinionWavesSpawned = 0;
+    var maxBossMinionWaves = 5;
+    var bossActive = false;
+    var currentBoss = null;
+    
+    // Screen shake system variables
+    var screenShake = {
+        intensity: 0,
+        duration: 0,
+        startTime: 0,
+        offsetX: 0,
+        offsetY: 0
+    };
+    
+    // Boss intro system variables
+    var bossIntro = {
+        active: false,
+        startTime: 0,
+        duration: 0,
+        startY: -100,
+        targetY: 80,
+        warningText: "BOSS INCOMING"
+    };
     function getPlayerName() {
         var n = localStorage.getItem(STORAGE_NAME);
         if (n && n.replace(/\s/g, "").length) {
@@ -660,6 +689,319 @@ var game = (function () {
         return false;
     };
 
+    // ========================================
+    // ARCADE FORMATION SYSTEM
+    // ========================================
+    
+    /**
+     * FormationController - Manages enemy group movement and positioning
+     * Handles arcade-style formations with oscillating movement
+     */
+    function FormationController() {
+        this.formationType = null;
+        this.centerX = canvas.width / 2;
+        this.centerY = 100;
+        this.baseSpeed = 1.0;
+        this.horizontalDirection = 1;
+        this.oscillationAmount = 150;
+        this.downwardDrift = 0.02;
+        this.time = 0;
+        this.enemies = [];
+        this.isActive = false;
+    }
+
+    FormationController.prototype = {
+        // Initialize formation with type and enemies
+        initFormation: function(type, enemyList, waveLevel) {
+            this.formationType = type;
+            this.enemies = enemyList;
+            this.isActive = true;
+            this.time = 0;
+            
+            // Apply difficulty scaling
+            this.baseSpeed = 0.8 + (waveLevel * 0.15);
+            this.oscillationAmount = 120 + (waveLevel * 10);
+            this.downwardDrift = 0.015 + (waveLevel * 0.005);
+            
+            // Position enemies in formation
+            this.positionEnemiesInFormation();
+            
+            // Set initial shooting delays based on wave
+            this.setInitialShootingDelays(waveLevel);
+        },
+        
+        // Position enemies based on formation type
+        positionEnemiesInFormation: function() {
+            var count = this.enemies.length;
+            
+            switch(this.formationType) {
+                case "grid":
+                    this.positionGridFormation(count);
+                    break;
+                case "v-shape":
+                    this.positionVShapeFormation(count);
+                    break;
+                case "line":
+                    this.positionLineFormation(count);
+                    break;
+                case "sine-wave":
+                    this.positionSineWaveFormation(count);
+                    break;
+                case "zigzag":
+                    this.positionZigZagFormation(count);
+                    break;
+                default:
+                    this.positionGridFormation(count);
+            }
+        },
+        
+        // Grid formation (classic arcade style) - Fixed overlapping
+        positionGridFormation: function(count) {
+            var cols = Math.min(5, Math.max(3, Math.ceil(Math.sqrt(count))));
+            var rows = Math.ceil(count / cols);
+            var spacingX = 85; // Increased spacing to prevent overlap
+            var spacingY = 70; // Increased spacing to prevent overlap
+            
+            for (var i = 0; i < count; i++) {
+                var col = i % cols;
+                var row = Math.floor(i / cols);
+                var enemy = this.enemies[i];
+                
+                // Calculate position relative to center
+                enemy.formationOffsetX = (col - (cols - 1) / 2) * spacingX;
+                enemy.formationOffsetY = (row - (rows - 1) / 2) * spacingY;
+                enemy.formationIndex = i;
+                
+                // Add small random offset to prevent perfect alignment overlap
+                enemy.formationOffsetX += (Math.random() - 0.5) * 5;
+                enemy.formationOffsetY += (Math.random() - 0.5) * 3;
+            }
+        },
+        
+        // V-Shape formation - Fixed overlapping
+        positionVShapeFormation: function(count) {
+            var spacing = 55; // Increased spacing
+            var depth = 30;   // Increased vertical spacing
+            
+            for (var i = 0; i < count; i++) {
+                var enemy = this.enemies[i];
+                var level = Math.floor(i / 2);
+                var side = (i % 2 === 0) ? -1 : 1;
+                
+                // Ensure proper spacing between levels
+                enemy.formationOffsetX = side * spacing * (level + 1);
+                enemy.formationOffsetY = depth * level;
+                enemy.formationIndex = i;
+                
+                // Small random variation
+                enemy.formationOffsetX += (Math.random() - 0.5) * 4;
+                enemy.formationOffsetY += (Math.random() - 0.5) * 2;
+            }
+        },
+        
+        // Line formation - Fixed overlapping
+        positionLineFormation: function(count) {
+            var spacing = Math.max(75, 800 / count); // Dynamic spacing based on count
+            
+            for (var i = 0; i < count; i++) {
+                var enemy = this.enemies[i];
+                enemy.formationOffsetX = (i - (count - 1) / 2) * spacing;
+                enemy.formationOffsetY = 0;
+                enemy.formationIndex = i;
+                
+                // Small random variation
+                enemy.formationOffsetY += (Math.random() - 0.5) * 5;
+            }
+        },
+        
+        // Sine Wave formation - Fixed overlapping
+        positionSineWaveFormation: function(count) {
+            var spacing = Math.max(65, 750 / count); // Dynamic spacing
+            var amplitude = 45; // Increased amplitude
+            
+            for (var i = 0; i < count; i++) {
+                var enemy = this.enemies[i];
+                enemy.formationOffsetX = (i - (count - 1) / 2) * spacing;
+                enemy.formationOffsetY = Math.sin((i / count) * Math.PI * 2) * amplitude;
+                enemy.formationIndex = i;
+                
+                // Small random variation
+                enemy.formationOffsetX += (Math.random() - 0.5) * 3;
+                enemy.formationOffsetY += (Math.random() - 0.5) * 4;
+            }
+        },
+        
+        // Zig-Zag formation - Fixed overlapping
+        positionZigZagFormation: function(count) {
+            var spacing = Math.max(70, 800 / count); // Dynamic spacing
+            var amplitude = 55; // Increased amplitude
+            
+            for (var i = 0; i < count; i++) {
+                var enemy = this.enemies[i];
+                enemy.formationOffsetX = (i - (count - 1) / 2) * spacing;
+                enemy.formationOffsetY = ((i % 2) === 0 ? -amplitude : amplitude);
+                enemy.formationIndex = i;
+                
+                // Small random variation
+                enemy.formationOffsetX += (Math.random() - 0.5) * 4;
+                enemy.formationOffsetY += (Math.random() - 0.5) * 3;
+            }
+        },
+        
+        // Update formation movement - Enhanced with dynamic lateral movement and evasion
+        update: function() {
+            if (!this.isActive || this.enemies.length === 0) return;
+            
+            this.time += 0.016; // ~60fps timing
+            
+            // Enhanced movement patterns
+            this.updateFormationCenter();
+            this.updateEvasionBehavior();
+            
+            // Update each enemy position with individual movement
+            for (var i = 0; i < this.enemies.length; i++) {
+                var enemy = this.enemies[i];
+                if (enemy && !enemy.dead) {
+                    this.updateEnemyPosition(enemy, i);
+                }
+            }
+        },
+        
+        // Update formation center with complex movement patterns
+        updateFormationCenter: function() {
+            // Primary oscillating horizontal movement
+            var primaryHorizontal = Math.sin(this.time * this.baseSpeed) * this.oscillationAmount;
+            
+            // Secondary lateral movement (figure-8 pattern)
+            var secondaryHorizontal = Math.sin(this.time * this.baseSpeed * 2) * (this.oscillationAmount * 0.3);
+            var verticalMovement = Math.cos(this.time * this.baseSpeed * 1.5) * 20;
+            
+            // Combine movements for complex pattern
+            this.centerX = (canvas.width / 2) + primaryHorizontal + secondaryHorizontal;
+            this.centerY += this.downwardDrift + (verticalMovement * 0.1);
+            
+            // Keep formation within bounds with smooth bouncing
+            var margin = 100;
+            if (this.centerX < margin) {
+                this.centerX = margin;
+                this.horizontalDirection = 1;
+            } else if (this.centerX > canvas.width - margin) {
+                this.centerX = canvas.width - margin;
+                this.horizontalDirection = -1;
+            }
+        },
+        
+        // Evasion behavior - formation reacts to player position
+        updateEvasionBehavior: function() {
+            if (!player || player.dead) return;
+            
+            var playerCenterX = player.posX + player.w / 2;
+            var formationCenterX = this.centerX;
+            var distance = Math.abs(playerCenterX - formationCenterX);
+            
+            // If player is close, formation tries to evade
+            if (distance < 150) {
+                var evasionStrength = (150 - distance) / 150; // 0 to 1
+                var evasionDirection = (formationCenterX < playerCenterX) ? -1 : 1;
+                
+                // Apply evasion movement
+                this.centerX += evasionDirection * evasionStrength * 2;
+                
+                // Add vertical evasion when player is directly below
+                if (player.posY > this.centerY + 100) {
+                    this.centerY += evasionStrength * 0.5;
+                }
+            }
+        },
+        
+        // Update individual enemy position with additional movement
+        updateEnemyPosition: function(enemy, index) {
+            // Base formation position
+            var baseX = this.centerX + enemy.formationOffsetX;
+            var baseY = this.centerY + enemy.formationOffsetY;
+            
+            // Individual enemy movement (dodging behavior)
+            var individualOffsetX = Math.sin(this.time * 2 + index * 0.5) * 8;
+            var individualOffsetY = Math.cos(this.time * 3 + index * 0.3) * 5;
+            
+            // Random micro-movements for more organic feel
+            if (Math.random() < 0.02) { // 2% chance per frame
+                enemy.dodgeX = (Math.random() - 0.5) * 15;
+                enemy.dodgeY = (Math.random() - 0.5) * 10;
+                enemy.dodgeDecay = 0.95;
+            }
+            
+            // Apply dodge with decay
+            if (enemy.dodgeX !== undefined) {
+                individualOffsetX += enemy.dodgeX;
+                individualOffsetY += enemy.dodgeY;
+                enemy.dodgeX *= enemy.dodgeDecay;
+                enemy.dodgeY *= enemy.dodgeDecay;
+                
+                // Remove dodge when it's too small
+                if (Math.abs(enemy.dodgeX) < 0.5 && Math.abs(enemy.dodgeY) < 0.5) {
+                    enemy.dodgeX = undefined;
+                    enemy.dodgeY = undefined;
+                }
+            }
+            
+            // Final position calculation
+            enemy.posX = baseX + individualOffsetX;
+            enemy.posY = baseY + individualOffsetY;
+            
+            // Keep enemies within canvas bounds
+            enemy.posX = Math.max(0, Math.min(canvas.width - enemy.w, enemy.posX));
+            enemy.posY = Math.max(0, Math.min(canvas.height - enemy.h, enemy.posY));
+        },
+        
+        // Set initial shooting delays to prevent immediate firing
+        setInitialShootingDelays: function(waveLevel) {
+            for (var i = 0; i < this.enemies.length; i++) {
+                var enemy = this.enemies[i];
+                // Stagger delays to prevent all enemies firing at once
+                enemy.shootActivationTime = Date.now() + (2000 + (i * 200) + (waveLevel * 100));
+                enemy.lastShotTime = 0;
+                enemy.staggeredShotDelay = (i * 300) + rand(500); // Individual timing
+            }
+        },
+        
+        // Check if enemy can shoot (with delay and staggering)
+        canEnemyShoot: function(enemy) {
+            var now = Date.now();
+            
+            // Must wait for activation delay
+            if (now < enemy.shootActivationTime) {
+                return false;
+            }
+            
+            // Stagger shooting between enemies
+            var timeSinceLastShot = now - enemy.lastShotTime;
+            var baseShotInterval = 1500 - (currentWave * 50); // Faster shooting in later waves
+            var minInterval = Math.max(600, baseShotInterval); // Minimum interval cap
+            
+            return timeSinceLastShot > (minInterval + enemy.staggeredShotDelay);
+        },
+        
+        // Mark enemy as having shot
+        markEnemyShot: function(enemy) {
+            enemy.lastShotTime = Date.now();
+            enemy.staggeredShotDelay = 500 + rand(800); // Reset with new random delay
+        },
+        
+        // Remove dead enemy from formation
+        removeEnemy: function(enemy) {
+            var index = this.enemies.indexOf(enemy);
+            if (index > -1) {
+                this.enemies.splice(index, 1);
+            }
+            
+            // Deactivate if no enemies left
+            if (this.enemies.length === 0) {
+                this.isActive = false;
+            }
+        }
+    };
+
     function Player() {
         this.image = playerImage;
         this.life = 3;
@@ -691,13 +1033,61 @@ var game = (function () {
         this.phaseTick = 0;
         this.life = this.isBoss ? (8 + level * 2) : (2 + Math.floor(level / 2));
         this.pointsToKill = this.isBoss ? (40 + level * 7) : (6 + level * 2);
-        //this.shotCooldown = 40 + rand(140);
         this.spawnTime = Date.now();
         this.shootDelay = 1200 + rand(800);
+        
+        // Formation properties
+        this.formationOffsetX = 0;
+        this.formationOffsetY = 0;
+        this.formationIndex = 0;
+        this.isInFormation = false;
+        
+        // Shooting properties for formation system
+        this.shootActivationTime = 0;
+        this.lastShotTime = 0;
+        this.staggeredShotDelay = 0;
     }
 
     Enemy.prototype.update = function () {
         if (this.dead) { return; }
+        
+        // Boss behavior
+        if (this.isBoss && bossActive && this === currentBoss) {
+            this.updateBossBehavior();
+            return;
+        }
+        
+        // If enemy is in formation, formation controller handles movement
+        if (this.isInFormation && activeFormationController && activeFormationController.isActive) {
+            // Formation controller handles position updates
+            // Just handle animation here
+            this.animCount++;
+            if (this.animCount > 5) {
+                this.animCount = 0;
+                this.frame = (this.frame + 1) % 8;
+                this.image = this.imageSet[this.frame];
+            }
+            
+            // Simplified shooting for formation enemies
+            if (this.isInFormation) {
+                // Check if enemy can shoot (with delay)
+                var now = Date.now();
+                if (!this.lastShotTime || now - this.lastShotTime > 2000) { // 2 second cooldown
+                    if (Math.random() < 0.3) { // 30% chance per cooldown
+                        enemyShots.push({
+                            x: this.posX + this.w / 2 - 4,
+                            y: this.posY + this.h,
+                            speed: 3.2 + level * 0.1,
+                            img: enemyShotImage
+                        });
+                        this.lastShotTime = now;
+                    }
+                }
+            }
+            return;
+        }
+        
+        // Legacy movement for non-formation enemies (bosses, etc.)
         this.posY += this.downSpeed;
         this.phaseTick++;
         if (this.phaseTick > this.phase) {
@@ -709,62 +1099,203 @@ var game = (function () {
         this.posX += this.hSpeed * this.hDir;
         if (this.posX < 0) { this.posX = 0; this.hDir = 1; }
         if (this.posX > canvas.width - this.w) { this.posX = canvas.width - this.w; this.hDir = -1; }
+        
         this.animCount++;
         if (this.animCount > 5) {
             this.animCount = 0;
             this.frame = (this.frame + 1) % 8;
             this.image = this.imageSet[this.frame];
         }
-       /* this.shotCooldown--;
-        if (this.shotCooldown <= 0) {
-            var baseCooldown = typeof this.customShootInterval === "number"
-                ? this.customShootInterval
-                : ((this.isBoss ? 28 : 55) + rand(120) - Math.min(level * 2, 20));
-            this.shotCooldown = Math.max(14, baseCooldown);
-            enemyShots.push({ x: this.posX + this.w / 2 - 4, y: this.posY + this.h, speed: 3.2 + level * 0.1, img: enemyShotImage });
-        }
-    };*/
-        // 🔥 Delay inicial antes de disparar (evita daño injusto)
+        
+        // Legacy shooting for non-formation enemies
         if (!this.spawnTime) {
             this.spawnTime = Date.now();
-            this.shootDelay = 700 + rand(800); // 1.2s a 2s
-           }
+            this.shootDelay = 700 + rand(800);
+        }
 
-//  no dispara inmediatamente al aparecer
         if (Date.now() - this.spawnTime < this.shootDelay) {
             return;
-         }
+        }
 
         this.shotCooldown--;
 
         if (this.shotCooldown <= 0) {
-
             var baseCooldown = typeof this.customShootInterval === "number"
                 ? this.customShootInterval
-                : ((this.isBoss ? 40 : 80) + rand(100)); // más lento
+                : ((this.isBoss ? 40 : 80) + rand(100));
 
-    // 🔥 SOLO algunos enemigos disparan
-            if (Math.random() < 0.3) { // 30% probabilidad
-
-               enemyShots.push({
-                   x: this.posX + this.w / 2 - 4,
-                   y: this.posY + this.h,
-                   speed: 3.2 + level * 0.1,
-                   img: enemyShotImage
-        });
-    }
+            if (Math.random() < 0.3) { // 30% probability
+                enemyShots.push({
+                    x: this.posX + this.w / 2 - 4,
+                    y: this.posY + this.h,
+                    speed: 3.2 + level * 0.1,
+                    img: enemyShotImage
+                });
+            }
 
             this.shotCooldown = Math.max(25, baseCooldown);
         }
-    }
+    };
+
+    // Boss behavior update method
+    Enemy.prototype.updateBossBehavior = function() {
+        if (!this.isBoss || this.dead) return;
+        
+        // Animation
+        this.animCount++;
+        if (this.animCount > 5) {
+            this.animCount = 0;
+            this.frame = (this.frame + 1) % 8;
+            this.image = this.imageSet[this.frame];
+        }
+        
+        // Boss movement
+        this.updateBossMovement();
+        
+        // Boss abilities
+        this.updateBossAbilities();
+        
+        // Boss shooting
+        this.updateBossShooting();
+    };
+    
+    // Boss movement
+    Enemy.prototype.updateBossMovement = function() {
+        // Horizontal movement
+        this.posX += this.hSpeed * this.bossDirection;
+        
+        // Bounce at edges
+        if (this.posX <= 0) {
+            this.posX = 0;
+            this.bossDirection = 1;
+        } else if (this.posX >= canvas.width - this.w) {
+            this.posX = canvas.width - this.w;
+            this.bossDirection = -1;
+        }
+        
+        // Vertical movement - keep boss in upper area
+        var targetY = 80; // Keep boss in upper area
+        var verticalMovement = Math.sin(Date.now() * 0.0005) * 20; // Slower sine wave
+        this.posY = targetY + verticalMovement;
+        
+        // Ensure boss stays on screen vertically
+        if (this.posY < 30) this.posY = 30;
+        if (this.posY > 200) this.posY = 200;
+        
+        // Dodge behavior - much lower probability
+        this.bossDodgeCooldown--;
+        if (this.bossDodgeCooldown <= 0 && Math.random() < 0.005) { // 0.5% chance
+            this.bossDodgeCooldown = 120; // 2 second cooldown
+            var dodgeDirection = (Math.random() < 0.5) ? -1 : 1;
+            this.posX += dodgeDirection * 30; // Smaller dodge
+        }
+    };
+    
+    // Boss abilities
+    Enemy.prototype.updateBossAbilities = function() {
+        this.bossAbilityCooldown--;
+        
+        // Check if current ability should end
+        if (this.currentAbility && this.abilityStartTime > 0) {
+            var elapsed = Date.now() - this.abilityStartTime;
+            if (elapsed >= this.abilityDuration) {
+                this.deactivateCurrentAbility();
+            }
+        }
+        
+        // Trigger new abilities based on health percentage
+        var healthPercentage = bossHP / bossMaxHP;
+        
+        if (this.bossAbilityCooldown <= 0 && !this.currentAbility) {
+            if (healthPercentage < 0.7 && Math.random() < 0.3) {
+                this.activateTripleShot();
+            } else if (healthPercentage < 0.4 && Math.random() < 0.25) {
+                this.activateShield();
+            } else if (healthPercentage < 0.2 && Math.random() < 0.2) {
+                this.activateSpeedBoost();
+            }
+        }
+    };
+    
+    // Deactivate current ability
+    Enemy.prototype.deactivateCurrentAbility = function() {
+        if (this.currentAbility === "shield") {
+            this.shielded = false;
+        } else if (this.currentAbility === "speed") {
+            this.hSpeed = this.originalSpeed; // Restore original speed
+        }
+        this.currentAbility = null;
+        this.abilityStartTime = 0;
+        this.abilityDuration = 0;
+    };
+    
+    // Boss shooting
+    Enemy.prototype.updateBossShooting = function() {
+        // Don't shoot during intro phase
+        if (!this.canAttack) return;
+        
+        this.shotCooldown--;
+        if (this.shotCooldown <= 0) {
+            // Triple shot ability
+            if (this.currentAbility === "triple") {
+                for (var i = -1; i <= 1; i++) {
+                    enemyShots.push({
+                        x: this.posX + this.w / 2 - 4 + (i * 20),
+                        y: this.posY + this.h,
+                        speed: 3.5 + level * 0.1,
+                        img: enemyShotImage
+                    });
+                }
+            } else {
+                // Normal shot
+                enemyShots.push({
+                    x: this.posX + this.w / 2 - 4,
+                    y: this.posY + this.h,
+                    speed: 3.2 + level * 0.1,
+                    img: enemyShotImage
+                });
+            }
+            
+            this.shotCooldown = this.customShootInterval || 60;
+        }
+    };
+    
+    // Boss ability: Triple Shot
+    Enemy.prototype.activateTripleShot = function() {
+        this.currentAbility = "triple";
+        this.abilityStartTime = Date.now();
+        this.abilityDuration = 3000; // 3 seconds
+        this.bossAbilityCooldown = 180; // 3 second cooldown
+    };
+    
+    // Boss ability: Shield
+    Enemy.prototype.activateShield = function() {
+        this.currentAbility = "shield";
+        this.abilityStartTime = Date.now();
+        this.abilityDuration = 4000; // 4 seconds
+        this.shielded = true;
+        this.bossAbilityCooldown = 240; // 4 second cooldown
+    };
+    
+    // Boss ability: Speed Boost
+    Enemy.prototype.activateSpeedBoost = function() {
+        this.currentAbility = "speed";
+        this.abilityStartTime = Date.now();
+        this.abilityDuration = 3300; // 3.3 seconds
+        this.hSpeed = this.originalSpeed * 1.2; // 1.2x speed boost
+        this.bossAbilityCooldown = 200; // 3.3 second cooldown
+    };
 
     function isBossLevel() { return currentWave === totalWaves; }
 
     function initWaves() {
         waves = [];
-        var patterns = ["grid", "v-shape", "diagonal"];
+        // All formation types including the new ones
+        var patterns = ["grid", "v-shape", "line", "sine-wave", "zigzag"];
+        
         for (var i = 1; i <= totalWaves; i++) {
             if (i === totalWaves) {
+                // Boss wave - doesn't use formation system
                 waves.push({
                     enemyCount: 1,
                     enemySpeed: 1.6,
@@ -773,10 +1304,11 @@ var game = (function () {
                     boss: true
                 });
             } else {
+                // Regular waves with formation system
                 waves.push({
-                    enemyCount: 6 + ((i - 1) * 2),
-                    enemySpeed: 0.9 + (i * 0.18),
-                    shootInterval: Math.max(38, 112 - (i * 14)),
+                    enemyCount: 6 + ((i - 1) * 2), // Progressive enemy count
+                    enemySpeed: 0.8 + (i * 0.15), // Progressive speed
+                    shootInterval: Math.max(40, 120 - (i * 15)), // Faster shooting in later waves
                     formationPattern: patterns[(i - 1) % patterns.length],
                     boss: false
                 });
@@ -839,44 +1371,179 @@ var game = (function () {
         var cfg = getCurrentWaveConfig();
         if (!cfg) { return; }
         enemies.length = 0;
+        
+        // Clean up any existing formation controller
+        if (activeFormationController) {
+            activeFormationController.isActive = false;
+            activeFormationController = null;
+        }
+        
         if (cfg.boss) {
+            // Initialize boss encounter with dramatic intro
             var boss = new Enemy(true);
             boss.posX = (canvas.width - boss.w) / 2;
-            boss.posY = -boss.h - 20;
-            boss.downSpeed = cfg.enemySpeed * 0.75;
-            boss.hSpeed = 1.2 + currentWave * 0.12;
+            boss.posY = bossIntro.startY; // Start off screen for intro
+            boss.downSpeed = 0; // No automatic movement during intro
+            boss.hSpeed = 1.0 + (currentWave * 0.05); // Slower horizontal speed
             boss.customShootInterval = cfg.shootInterval;
             boss.shotCooldown = cfg.shootInterval;
+            boss.isInFormation = false;
+            boss.canAttack = false; // Disable attacks during intro
+            
+            // Initialize boss system
+            currentBoss = boss;
+            bossMaxHP = 50 + (currentWave * 20); // Scaling HP
+            bossHP = bossMaxHP;
+            bossActive = true;
+            bossMinionWavesSpawned = 0;
+            
+            // Boss ability variables
+            boss.bossDirection = 1;
+            boss.bossDodgeCooldown = 0;
+            boss.bossAbilityCooldown = 0;
+            boss.currentAbility = null;
+            boss.abilityStartTime = 0;
+            boss.abilityDuration = 0;
+            boss.originalSpeed = boss.hSpeed; // Store original speed
+            
             enemies.push(boss);
+            
+            // Start dramatic boss intro
+            startBossIntro();
             return;
         }
+        
+        // Create enemies for multiple formations if needed
         var count = cfg.enemyCount;
-        var centerX = canvas.width / 2;
-        var baseY = -70;
-        var spacingX = 86;
-        var spacingY = 64;
-        for (var i = 0; i < count; i++) {
-            var e = new Enemy(false);
-            var col, row;
-            if (cfg.formationPattern === "grid") {
-                col = i % 4;
-                row = Math.floor(i / 4);
-                e.posX = 120 + (col * spacingX);
-                e.posY = baseY - (row * spacingY);
-            } else if (cfg.formationPattern === "v-shape") {
-                var offset = i - Math.floor(count / 2);
-                e.posX = centerX + (offset * 42);
-                e.posY = baseY - (Math.abs(offset) * 20);
-            } else {
-                e.posX = 90 + (i * 56);
-                e.posY = baseY - (i * 28);
+        var enemyList = [];
+        var maxEnemiesPerFormation = getMaxEnemiesPerFormation(cfg.formationPattern);
+        
+        // Calculate how many formations we need
+        var numFormations = Math.ceil(count / maxEnemiesPerFormation);
+        var enemiesPerFormation = Math.ceil(count / numFormations);
+        
+        // console.log("Enemy count:", count, "Max per formation:", maxEnemiesPerFormation, "Formations needed:", numFormations);
+        
+        // Reset secondary controllers array
+        secondaryFormationControllers = [];
+        
+        for (var formationIndex = 0; formationIndex < numFormations; formationIndex++) {
+            var formationEnemies = [];
+            var enemiesInThisFormation = Math.min(enemiesPerFormation, count - (formationIndex * enemiesPerFormation));
+            
+            // Create enemies for this formation
+            for (var i = 0; i < enemiesInThisFormation; i++) {
+                var e = new Enemy(false);
+                e.isInFormation = true;
+                e.formationGroup = formationIndex; // Track which formation group
+                e.downSpeed = 0; // Formation controller handles movement
+                e.hSpeed = 0;    // Formation controller handles movement
+                formationEnemies.push(e);
+                enemyList.push(e);
             }
-            e.downSpeed = cfg.enemySpeed;
-            e.hSpeed = 1 + (cfg.enemySpeed * 0.75);
-            e.customShootInterval = cfg.shootInterval;
-            e.shotCooldown = cfg.shootInterval + rand(40);
-            enemies.push(e);
+            
+            // Create formation controller for this group
+            if (formationIndex === 0) {
+                // Primary formation - uses the configured pattern
+                activeFormationController = new FormationController();
+                activeFormationController.initFormation(cfg.formationPattern, formationEnemies, currentWave);
+                activeFormationController.formationGroup = 0;
+            } else {
+                // Secondary formations - use simpler patterns
+                var secondaryController = new FormationController();
+                var secondaryPattern = getSecondaryFormationPattern(formationIndex);
+                secondaryController.initFormation(secondaryPattern, formationEnemies, currentWave);
+                secondaryController.formationGroup = formationIndex;
+                secondaryController.centerY = 50 + (formationIndex * 80); // Stagger vertically
+                secondaryController.oscillationAmount = 80 - (formationIndex * 20); // Smaller movement for secondary formations
+                
+                // Store secondary controller
+                secondaryFormationControllers.push(secondaryController);
+            }
         }
+        
+        // Add all enemies to game
+        enemies = enemyList;
+    }
+
+    // Spawn minion wave during boss fight using existing formation system
+    function spawnBossMinionWave() {
+        if (!bossActive || !currentBoss) return;
+        
+        bossMinionWavesSpawned++;
+        var minionCount = 4 + Math.floor(currentWave / 2); // 4-6 minions
+        var patterns = ["grid", "v-shape", "line"];
+        var pattern = patterns[bossMinionWavesSpawned % patterns.length];
+        
+        // Create temporary wave config for minions
+        var tempWave = {
+            enemyCount: minionCount,
+            enemySpeed: 0.8 + (currentWave * 0.1),
+            shootInterval: 100 + (currentWave * 10),
+            formationPattern: pattern,
+            boss: false
+        };
+        
+        // Use existing formation system
+        var count = tempWave.enemyCount;
+        var enemyList = [];
+        var maxEnemiesPerFormation = getMaxEnemiesPerFormation(tempWave.formationPattern);
+        var numFormations = Math.ceil(count / maxEnemiesPerFormation);
+        var enemiesPerFormation = Math.ceil(count / numFormations);
+        
+        for (var formationIndex = 0; formationIndex < numFormations; formationIndex++) {
+            var formationEnemies = [];
+            var enemiesInThisFormation = Math.min(enemiesPerFormation, count - (formationIndex * enemiesPerFormation));
+            
+            for (var i = 0; i < enemiesInThisFormation; i++) {
+                var e = new Enemy(false);
+                e.isInFormation = true;
+                e.formationGroup = formationIndex;
+                e.downSpeed = 0;
+                e.hSpeed = 0;
+                formationEnemies.push(e);
+                enemyList.push(e);
+            }
+            
+            // Create formation controller
+            if (formationIndex === 0) {
+                var controller = new FormationController();
+                controller.initFormation(tempWave.formationPattern, formationEnemies, currentWave);
+                controller.formationGroup = formationIndex;
+                controller.centerY = 200 + (formationIndex * 60); // Lower than boss
+                controller.oscillationAmount = 60; // Smaller movement
+                secondaryFormationControllers.push(controller);
+            } else {
+                var secondaryController = new FormationController();
+                var secondaryPattern = getSecondaryFormationPattern(formationIndex);
+                secondaryController.initFormation(secondaryPattern, formationEnemies, currentWave);
+                secondaryController.formationGroup = formationIndex;
+                secondaryController.centerY = 200 + (formationIndex * 60);
+                secondaryController.oscillationAmount = 50;
+                secondaryFormationControllers.push(secondaryController);
+            }
+        }
+        
+        // Add minions to game (keep boss)
+        enemies = enemies.concat(enemyList);
+    }
+
+    // Get maximum enemies that can fit in a formation type
+    function getMaxEnemiesPerFormation(pattern) {
+        var maxPerFormation = {
+            "grid": 20,      // 4x5 grid max
+            "v-shape": 10,    // 5 per side max
+            "line": 12,        // Line gets crowded after 12
+            "sine-wave": 15,   // Wave pattern max
+            "zigzag": 14       // Zigzag max
+        };
+        return maxPerFormation[pattern] || 12;
+    }
+    
+    // Get pattern for secondary formations
+    function getSecondaryFormationPattern(formationIndex) {
+        var patterns = ["line", "v-shape", "grid"];
+        return patterns[formationIndex % patterns.length];
     }
 
     function updateWaveSystem() {
@@ -889,25 +1556,41 @@ var game = (function () {
             return;
         }
         if (waveState === "fight") {
-
-            // 🔥 RESPWAN SI NO HAY ENEMIGOS Y FALTAN KILLS
-            if (enemies.length === 0 && killsInLevel < killsTargetInLevel) {
-        
-                var missing = killsTargetInLevel - killsInLevel;
-        
-                spawnRemainingEnemies(missing);
-        
-                return;
-            }
-        
-            // ✔ avanzar normalmente
-            if (killsInLevel >= killsTargetInLevel && enemies.length === 0) {
-                if (currentWave >= totalWaves) {
+            // Boss fight logic
+            if (isBossLevel() && bossActive && currentBoss) {
+                // Check if boss is dead
+                if (currentBoss.dead || bossHP <= 0) {
+                    bossActive = false;
+                    currentBoss = null;
                     waveState = "completed";
                     finishGame(true, player.score);
-                } else {
-                    waveState = "transition";
-                    waveTransitionUntil = now + 2000;
+                    return;
+                }
+                
+                // Spawn minion waves when all enemies are dead
+                if (enemies.length === 1 && enemies[0] === currentBoss) {
+                    // Only boss remains, spawn next wave
+                    if (bossMinionWavesSpawned < maxBossMinionWaves) {
+                        spawnBossMinionWave();
+                    }
+                }
+            } else {
+                // Regular wave logic
+                if (enemies.length === 0 && killsInLevel < killsTargetInLevel) {
+                    var missing = killsTargetInLevel - killsInLevel;
+                    spawnRemainingEnemies(missing);
+                    return;
+                }
+                
+                // Advance normally
+                if (killsInLevel >= killsTargetInLevel && enemies.length === 0) {
+                    if (currentWave >= totalWaves) {
+                        waveState = "completed";
+                        finishGame(true, player.score);
+                    } else {
+                        waveState = "transition";
+                        waveTransitionUntil = now + 2000;
+                    }
                 }
             }
         }
@@ -938,6 +1621,11 @@ var game = (function () {
         fireLock = false;
         nextPlayerShot = 0;
         currentWave = 0;
+        
+        // Reset formation controllers to prevent freezing
+        activeFormationController = null;
+        secondaryFormationControllers = [];
+        
         initWaves();
         beginWave(1);
         sessionActive = true;
@@ -1069,6 +1757,184 @@ var game = (function () {
             bufferctx.fillRect(s.x, s.y, s.size, s.size);
         }
         bufferctx.globalAlpha = 1;
+    }
+
+    function drawBossHealthBar() {
+        if (!bossActive || !currentBoss || bossMaxHP <= 0) return;
+        
+        var barWidth = 300; // Smaller width
+        var barHeight = 12; // Smaller height
+        var barX = (canvas.width - barWidth) / 2;
+        var barY = 25;
+        var healthPercentage = Math.max(0, Math.min(1, bossHP / bossMaxHP));
+        var healthWidth = barWidth * healthPercentage;
+        
+        // Background - more opaque
+        bufferctx.fillStyle = "rgba(0, 0, 0, 0.9)";
+        bufferctx.fillRect(barX - 1, barY - 1, barWidth + 2, barHeight + 2);
+        
+        // Border - thinner
+        bufferctx.strokeStyle = "#FF0000";
+        bufferctx.lineWidth = 1;
+        bufferctx.strokeRect(barX, barY, barWidth, barHeight);
+        
+        // Health fill
+        var healthColor = healthPercentage > 0.5 ? "#00FF00" : 
+                         healthPercentage > 0.25 ? "#FFFF00" : "#FF0000";
+        bufferctx.fillStyle = healthColor;
+        bufferctx.fillRect(barX + 1, barY + 1, healthWidth - 2, barHeight - 2);
+        
+        // Boss name - smaller font
+        bufferctx.fillStyle = "#FFFFFF";
+        bufferctx.font = "10px 'Press Start 2P'";
+        bufferctx.textAlign = "center";
+        bufferctx.fillText("BOSS", canvas.width / 2, barY - 5);
+        
+        // Health text - smaller font
+        bufferctx.font = "8px 'Press Start 2P'";
+        bufferctx.fillText(bossHP + " / " + bossMaxHP, canvas.width / 2, barY + barHeight + 12);
+    }
+
+    // Screen shake system functions
+    function startScreenShake(intensity, duration) {
+        screenShake.intensity = intensity;
+        screenShake.duration = duration;
+        screenShake.startTime = Date.now();
+        screenShake.offsetX = 0;
+        screenShake.offsetY = 0;
+    }
+    
+    function updateScreenShake() {
+        if (screenShake.duration <= 0) return;
+        
+        var now = Date.now();
+        var elapsed = now - screenShake.startTime;
+        var progress = Math.min(1, elapsed / screenShake.duration);
+        
+        // Smooth decay using ease-out
+        var decay = 1 - Math.pow(progress, 2);
+        var currentIntensity = screenShake.intensity * decay;
+        
+        // Generate random offsets
+        screenShake.offsetX = (Math.random() - 0.5) * currentIntensity * 2;
+        screenShake.offsetY = (Math.random() - 0.5) * currentIntensity * 2;
+        
+        // Stop shake when duration is over
+        if (progress >= 1) {
+            screenShake.intensity = 0;
+            screenShake.duration = 0;
+            screenShake.offsetX = 0;
+            screenShake.offsetY = 0;
+        }
+    }
+    
+    function applyScreenShake(x, y) {
+        return {
+            x: x + screenShake.offsetX,
+            y: y + screenShake.offsetY
+        };
+    }
+    
+    // Boss intro system functions
+    function startBossIntro() {
+        bossIntro.active = true;
+        bossIntro.startTime = Date.now();
+        bossIntro.duration = 3000; // 3 second intro
+    }
+    
+    function updateBossIntro() {
+        if (!bossIntro.active) return;
+        
+        var now = Date.now();
+        var elapsed = now - bossIntro.startTime;
+        var progress = Math.min(1, elapsed / bossIntro.duration);
+        
+        // Smooth ease-out animation
+        var easeProgress = 1 - Math.pow(1 - progress, 3);
+        
+        if (currentBoss) {
+            // Smooth descent from top to target position
+            currentBoss.posY = bossIntro.startY + (bossIntro.targetY - bossIntro.startY) * easeProgress;
+            
+            // Boss starts attacking after intro completes
+            if (progress >= 1) {
+                bossIntro.active = false;
+                currentBoss.canAttack = true; // Enable boss attacks
+            }
+        }
+    }
+    
+    function drawBossIntroWarning() {
+        if (!bossIntro.active || !currentBoss) return;
+        
+        var now = Date.now();
+        var elapsed = now - bossIntro.startTime;
+        var progress = Math.min(1, elapsed / bossIntro.duration);
+        
+        // Flashing warning text
+        var alpha = 0.5 + Math.sin(elapsed * 0.01) * 0.5;
+        
+        bufferctx.save();
+        bufferctx.globalAlpha = alpha;
+        bufferctx.fillStyle = "#FF0000";
+        bufferctx.font = "bold 24px 'Press Start 2P'";
+        bufferctx.textAlign = "center";
+        bufferctx.fillText(bossIntro.warningText, canvas.width / 2, canvas.height / 2);
+        bufferctx.restore();
+    }
+
+    function drawBossAbilityIndicators() {
+        if (!bossActive || !currentBoss || !currentBoss.currentAbility) return;
+        
+        var bossX = currentBoss.posX + currentBoss.w / 2;
+        var bossY = currentBoss.posY - 20;
+        
+        bufferctx.font = "8px 'Press Start 2P'";
+        bufferctx.textAlign = "center";
+        
+        var ability = currentBoss.currentAbility;
+        var elapsed = Date.now() - currentBoss.abilityStartTime;
+        var remaining = Math.max(0, currentBoss.abilityDuration - elapsed);
+        var percentage = remaining / currentBoss.abilityDuration;
+        
+        var color, text;
+        switch(ability) {
+            case "triple":
+                color = "#FF6600";
+                text = "TRIPLE";
+                break;
+            case "shield":
+                color = "#00CCFF";
+                text = "SHIELD";
+                break;
+            case "speed":
+                color = "#FFFF00";
+                text = "SPEED";
+                break;
+            default:
+                return;
+        }
+        
+        // Draw ability background
+        bufferctx.fillStyle = "rgba(0, 0, 0, 0.8)";
+        var textWidth = bufferctx.measureText(text).width;
+        bufferctx.fillRect(bossX - textWidth/2 - 4, bossY - 12, textWidth + 8, 16);
+        
+        // Draw ability text
+        bufferctx.fillStyle = color;
+        bufferctx.fillText(text, bossX, bossY);
+        
+        // Draw progress bar
+        var barWidth = 40;
+        var barHeight = 3;
+        var barX = bossX - barWidth/2;
+        var barY = bossY + 4;
+        
+        bufferctx.fillStyle = "rgba(0, 0, 0, 0.8)";
+        bufferctx.fillRect(barX - 1, barY - 1, barWidth + 2, barHeight + 2);
+        
+        bufferctx.fillStyle = color;
+        bufferctx.fillRect(barX, barY, barWidth * percentage, barHeight);
     }
 
     function drawHud() {
@@ -1428,7 +2294,22 @@ var game = (function () {
                 if (s.x >= e.posX && s.x <= e.posX + e.w && s.y >= e.posY && s.y <= e.posY + e.h) {
                     e.life -= 1;
                     hitEnemy = true;
-                    if (e.life <= 0) {
+                    if (e.isBoss && bossActive && e === currentBoss) {
+                        // Boss damage system - reduce HP instead of life
+                        if (!e.shielded) {
+                            bossHP -= 1;
+                            console.log("Boss hit! HP:", bossHP, "/", bossMaxHP);
+                            
+                            // Strong screen shake for boss hit
+                            startScreenShake(12, 400); // Strong shake for 400ms
+                        } else {
+                            console.log("Boss blocked by shield!");
+                            
+                            // Light screen shake for shield block
+                            startScreenShake(4, 200); // Light shake for 200ms
+                        }
+                    } else if (e.life <= 0) {
+                        // Regular enemy death
                         e.dead = true;
                         player.score += e.pointsToKill;
                         enemiesKilled++;
@@ -1436,6 +2317,25 @@ var game = (function () {
                         deathEffects.push({ x: e.posX, y: e.posY, w: e.w, h: e.h, ttl: 18, img: e.killedImage });
                         maybeDropHeart(e.posX + e.w / 2 - 10, e.posY + e.h / 2 - 10);
                         maybeDropPowerUp(e.posX + e.w / 2 - 10, e.posY + e.h / 2 - 10);
+                        
+                        // Light screen shake for enemy death
+                        startScreenShake(3, 150); // Light shake for 150ms
+                        
+                        // Remove from formation controller if in formation
+                        if (e.isInFormation) {
+                            // Check primary formation controller
+                            if (activeFormationController && e.formationGroup === 0) {
+                                activeFormationController.removeEnemy(e);
+                            }
+                            // Check secondary formation controllers
+                            else if (secondaryFormationControllers && e.formationGroup > 0) {
+                                var controller = secondaryFormationControllers[e.formationGroup - 1];
+                                if (controller) {
+                                    controller.removeEnemy(e);
+                                }
+                            }
+                        }
+                        
                         enemies.splice(j, 1);
                     }
                     break;
@@ -1464,6 +2364,10 @@ var game = (function () {
     function hurtPlayer() {
         if (player.dead || gameOver) { return; }
         if (isPowerUpActive("shield")) { return; }
+        
+        // Screen shake when player takes damage
+        startScreenShake(8, 300); // Medium shake for 300ms
+        
         player.dead = true;
         player.image = playerKilledImage;
         enemyShots.length = 0;
@@ -1529,11 +2433,42 @@ var game = (function () {
             bufferctx.arc(player.posX + player.w / 2, player.posY + player.h / 2, Math.max(player.w, player.h) * 0.6 + Math.sin(Date.now() * 0.01) * 2, 0, Math.PI * 2);
             bufferctx.stroke();
         }
+        
+        // Update screen shake system
+        updateScreenShake();
+        
+        // Update boss intro system
+        updateBossIntro();
+        
+        // Update formation controllers if active
+        if (activeFormationController && activeFormationController.isActive) {
+            activeFormationController.update();
+        }
+        
+        // Update secondary formation controllers
+        if (secondaryFormationControllers && secondaryFormationControllers.length > 0) {
+            for (var i = 0; i < secondaryFormationControllers.length; i++) {
+                var controller = secondaryFormationControllers[i];
+                if (controller && controller.isActive) {
+                    controller.update();
+                }
+            }
+        }
+        
         updateEnemies();
         updateShots();
         drawDeathEffects();
         updateHearts();
         updatePowerUps();
+        
+        // Draw boss intro warning if active
+        drawBossIntroWarning();
+        
+        // Draw boss health bar if active
+        drawBossHealthBar();
+        
+        // Draw boss ability indicators
+        drawBossAbilityIndicators();
         if (isPowerUpActive("triple")) {
             var remain = activePowerUps.triple - Date.now();
             var ratio = Math.max(0, Math.min(1, remain / powerUpDurations.triple));
@@ -1552,7 +2487,11 @@ var game = (function () {
         draw();
     }
 
-    function draw() { ctx.drawImage(buffer, 0, 0); }
+    function draw() {
+        // Apply screen shake to final render
+        var shakeOffset = applyScreenShake(0, 0);
+        ctx.drawImage(buffer, shakeOffset.x, shakeOffset.y);
+    }
 
     function readScoreRecords() {
         try {
