@@ -98,6 +98,19 @@ var game = (function () {
         targetY: 80,
         warningText: "BOSS INCOMING"
     };
+    
+    // Combo multiplier system variables
+    var combo = {
+        count: 0,
+        timer: 0,
+        resetTime: 2500, // 2.5 seconds without kills = reset
+        maxMultiplier: 5, // Maximum combo multiplier
+        multiplier: 1,
+        baseMultiplier: 1
+    };
+    
+    // Floating text system variables
+    var floatingTexts = []; // Array to hold all floating texts
     function getPlayerName() {
         var n = localStorage.getItem(STORAGE_NAME);
         if (n && n.replace(/\s/g, "").length) {
@@ -1883,6 +1896,101 @@ var game = (function () {
         bufferctx.restore();
     }
 
+    // Combo system functions
+    function updateCombo() {
+        var now = Date.now();
+        
+        // Check if combo should reset
+        if (now - combo.timer > combo.resetTime) {
+            combo.count = 0;
+            combo.multiplier = combo.baseMultiplier;
+        }
+    }
+    
+    function increaseCombo() {
+        combo.count++;
+        combo.timer = Date.now();
+        
+        // Calculate multiplier (capped at maxMultiplier)
+        combo.multiplier = Math.min(combo.maxMultiplier, combo.baseMultiplier + combo.count);
+    }
+    
+    function getComboMultiplier() {
+        updateCombo();
+        return combo.multiplier;
+    }
+    
+    function drawComboUI() {
+        if (combo.count <= 0) return;
+        
+        // Draw combo indicator
+        var text = "x" + combo.multiplier + " COMBO";
+        var alpha = 1.0;
+        
+        bufferctx.save();
+        bufferctx.globalAlpha = alpha;
+        bufferctx.fillStyle = "#FFD700"; // Gold color
+        bufferctx.font = "bold 16px 'Press Start 2P'";
+        bufferctx.textAlign = "right";
+        bufferctx.fillText(text, canvas.width - 20, 40);
+        
+        // Draw combo count
+        bufferctx.font = "12px 'Press Start 2P'";
+        bufferctx.fillText("Kills: " + combo.count, canvas.width - 20, 60);
+        bufferctx.restore();
+    }
+    
+    // Floating text system functions
+    function spawnFloatingText(x, y, text, color) {
+        floatingTexts.push({
+            x: x,
+            y: y,
+            text: text,
+            color: color || "#FFFFFF",
+            speed: 1.5, // pixels per frame upward
+            lifetime: 1200, // milliseconds
+            startTime: Date.now(),
+            alpha: 1.0
+        });
+    }
+    
+    function updateFloatingTexts() {
+        var now = Date.now();
+        
+        for (var i = floatingTexts.length - 1; i >= 0; i--) {
+            var text = floatingTexts[i];
+            var elapsed = now - text.startTime;
+            
+            // Move upward
+            text.y -= text.speed;
+            
+            // Calculate alpha (fade out over lifetime)
+            var fadeStart = text.lifetime * 0.7; // Start fading at 70% of lifetime
+            if (elapsed > fadeStart) {
+                text.alpha = Math.max(0, 1 - (elapsed - fadeStart) / (text.lifetime - fadeStart));
+            }
+            
+            // Remove if lifetime exceeded
+            if (elapsed > text.lifetime) {
+                floatingTexts.splice(i, 1);
+            }
+        }
+    }
+    
+    function drawFloatingTexts() {
+        for (var i = 0; i < floatingTexts.length; i++) {
+            var text = floatingTexts[i];
+            
+            bufferctx.save();
+            bufferctx.globalAlpha = text.alpha;
+            bufferctx.fillStyle = text.color;
+            bufferctx.font = "bold 14px 'Press Start 2P'";
+            bufferctx.textAlign = "center";
+            bufferctx.fillText(text.text, text.x, text.y);
+            bufferctx.restore();
+        }
+    }
+
     function drawBossAbilityIndicators() {
         if (!bossActive || !currentBoss || !currentBoss.currentAbility) return;
         
@@ -2311,12 +2419,27 @@ var game = (function () {
                     } else if (e.life <= 0) {
                         // Regular enemy death
                         e.dead = true;
-                        player.score += e.pointsToKill;
+                        
+                        // Update combo and calculate score with multiplier
+                        increaseCombo();
+                        var multiplier = getComboMultiplier();
+                        var scoreGained = e.pointsToKill * multiplier;
+                        player.score += scoreGained;
+                        
                         enemiesKilled++;
                         killsInLevel++;
                         deathEffects.push({ x: e.posX, y: e.posY, w: e.w, h: e.h, ttl: 18, img: e.killedImage });
                         maybeDropHeart(e.posX + e.w / 2 - 10, e.posY + e.h / 2 - 10);
                         maybeDropPowerUp(e.posX + e.w / 2 - 10, e.posY + e.h / 2 - 10);
+                        
+                        // Spawn floating text for score
+                        var scoreText = "+" + scoreGained;
+                        if (multiplier > 1) {
+                            scoreText += " (x" + multiplier + ")";
+                            spawnFloatingText(e.posX + e.w / 2, e.posY, scoreText, "#FFD700"); // Gold for combo
+                        } else {
+                            spawnFloatingText(e.posX + e.w / 2, e.posY, scoreText, "#FFFFFF"); // White for normal
+                        }
                         
                         // Light screen shake for enemy death
                         startScreenShake(3, 150); // Light shake for 150ms
@@ -2367,6 +2490,11 @@ var game = (function () {
         
         // Screen shake when player takes damage
         startScreenShake(8, 300); // Medium shake for 300ms
+        
+        // Reset combo when player takes damage
+        combo.count = 0;
+        combo.multiplier = combo.baseMultiplier;
+        combo.timer = 0;
         
         player.dead = true;
         player.image = playerKilledImage;
@@ -2461,11 +2589,19 @@ var game = (function () {
         updateHearts();
         updatePowerUps();
         
+        // Update combo and floating text systems
+        updateCombo();
+        updateFloatingTexts();
+        
         // Draw boss intro warning if active
         drawBossIntroWarning();
         
         // Draw boss health bar if active
         drawBossHealthBar();
+        
+        // Draw combo and floating text systems
+        drawComboUI();
+        drawFloatingTexts();
         
         // Draw boss ability indicators
         drawBossAbilityIndicators();
