@@ -1946,6 +1946,20 @@ var game = (function () {
                 startGame();
             });
         }
+        var btnMenuPrincipal = document.getElementById("btn-menu-principal");
+        if (btnMenuPrincipal) {
+            btnMenuPrincipal.addEventListener("click", function () {
+                hideEndOverlay();
+                // Return to main menu
+                sessionActive = false;
+                gameOver = false;
+                overlayShown = false;
+                if (startScreen) {
+                    startScreen.activate();
+                }
+                AudioManager.playMenuMusic();
+            });
+        }
         if (btnSaveName && inputName) { btnSaveName.addEventListener("click", function () { setPlayerName(inputName.value); }); }
         if (btnChangeName && inputName) { btnChangeName.addEventListener("click", function () { inputName.focus(); inputName.select(); }); }
         if (linkSpec) { linkSpec.addEventListener("click", function () { showModal("modal-especificaciones"); }); }
