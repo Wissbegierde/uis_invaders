@@ -245,7 +245,7 @@ var game = (function () {
     var deathEffects = [];
 
     var keyPressed = {};
-    var keyMap = { left: 37, right: 39, fire: 32 };
+    var keyMap = { left: 37, right: 39, up: 38, down: 40, fire: 32 };
     var fireLock = false;
     var nextPlayerShot = 0;
     var playerShotDelay = 380;
@@ -952,10 +952,10 @@ var game = (function () {
             this.isActive = true;
             this.time = 0;
             
-            // Apply difficulty scaling
-            this.baseSpeed = 0.3 + (waveLevel * 0.04);
-            this.oscillationAmount = 60 + (waveLevel * 5);
-            this.downwardDrift = 0.08 + (waveLevel * 0.015); // Noticeable downward drift
+            // Apply difficulty scaling - moderately faster movement
+            this.baseSpeed = 0.8 + (waveLevel * 0.08); // 2.5x faster base speed
+            this.oscillationAmount = 100 + (waveLevel * 10); // Larger lateral movement
+            this.downwardDrift = 0.2 + (waveLevel * 0.04); // Moderately faster vertical movement
             
             // Position enemies in formation
             this.positionEnemiesInFormation();
@@ -1082,21 +1082,24 @@ var game = (function () {
             }
         },
         
-        // Update formation movement - Enhanced with dynamic lateral movement and evasion
+        // Update formation movement - Enhanced with complex patterns and evasion
         update: function() {
             if (!this.isActive || this.enemies.length === 0) return;
             
             this.time += 0.016; // ~60fps timing
             
-            // Enhanced movement patterns
+            // Enhanced movement patterns with multiple behaviors
             this.updateFormationCenter();
             this.updateEvasionBehavior();
+            this.updateCoordinatedMovement();
+            this.updatePatternTransitions();
             
             // Update each enemy position with individual movement
             for (var i = 0; i < this.enemies.length; i++) {
                 var enemy = this.enemies[i];
                 if (enemy && !enemy.dead) {
                     this.updateEnemyPosition(enemy, i);
+                    this.updateEnemyShooting(enemy, i);
                 }
             }
         },
@@ -1124,7 +1127,70 @@ var game = (function () {
             }
         },
         
-        // Evasion behavior — horizontal only
+        // Coordinated group movement patterns
+        updateCoordinatedMovement: function() {
+            // Wave synchronization - enemies move in coordinated waves
+            var wavePhase = this.time * 3;
+            var waveAmplitude = 15;
+            
+            for (var i = 0; i < this.enemies.length; i++) {
+                var enemy = this.enemies[i];
+                if (enemy && !enemy.dead) {
+                    // Individual wave offset based on position in formation
+                    var waveOffset = Math.sin(wavePhase + (i * 0.5)) * waveAmplitude;
+                    enemy.coordinatedOffsetX = waveOffset;
+                    
+                    // Vertical wave movement
+                    var verticalWave = Math.cos(wavePhase * 1.5 + (i * 0.3)) * (waveAmplitude * 0.5);
+                    enemy.coordinatedOffsetY = verticalWave;
+                }
+            }
+        },
+        
+        // Pattern transitions for dynamic behavior changes
+        updatePatternTransitions: function() {
+            // Change movement patterns periodically
+            if (!this.patternChangeTime) this.patternChangeTime = 0;
+            
+            this.patternChangeTime += 0.016;
+            
+            // Change pattern every 5-8 seconds
+            if (this.patternChangeTime > (5 + Math.random() * 3)) {
+                this.patternChangeTime = 0;
+                this.changeMovementPattern();
+            }
+        },
+        
+        // Change to different movement pattern
+        changeMovementPattern: function() {
+            var patterns = ['aggressive', 'evasive', 'circular', 'zigzag', 'scattered'];
+            var newPattern = patterns[Math.floor(Math.random() * patterns.length)];
+            
+            switch(newPattern) {
+                case 'aggressive':
+                    this.baseSpeed = Math.min(2.5, this.baseSpeed * 1.3);
+                    this.oscillationAmount = Math.max(100, this.oscillationAmount * 0.8);
+                    break;
+                case 'evasive':
+                    this.baseSpeed = Math.min(2.2, this.baseSpeed * 1.2);
+                    this.oscillationAmount = Math.min(200, this.oscillationAmount * 1.4);
+                    break;
+                case 'circular':
+                    this.movementPattern = 'circular';
+                    this.patternStartTime = this.time;
+                    break;
+                case 'zigzag':
+                    this.movementPattern = 'zigzag';
+                    this.patternStartTime = this.time;
+                    break;
+                case 'scattered':
+                    this.movementPattern = 'scattered';
+                    this.patternStartTime = this.time;
+                    break;
+            }
+        },
+        
+        // Evasion behavior - formation reacts to player position
         updateEvasionBehavior: function() {
             if (!player || player.dead) return;
             
@@ -1174,18 +1240,47 @@ var game = (function () {
             enemy.posY = Math.max(0, Math.min(canvas.height - enemy.h, enemy.posY));
         },
         
-        // Set initial shooting delays to prevent immediate firing
-        setInitialShootingDelays: function(waveLevel) {
-            for (var i = 0; i < this.enemies.length; i++) {
-                var enemy = this.enemies[i];
-                // Stagger delays to prevent all enemies firing at once
-                enemy.shootActivationTime = Date.now() + (2000 + (i * 200) + (waveLevel * 100));
-                enemy.lastShotTime = 0;
-                enemy.staggeredShotDelay = (i * 300) + rand(500); // Individual timing
+        // Enhanced enemy shooting with much faster speed and frequency
+        updateEnemyShooting: function(enemy, index) {
+            if (!this.canEnemyShoot(enemy)) return;
+            
+            var now = Date.now();
+            var shootChance = 0.4 + (level * 0.05); // Much higher shooting chance per level
+            shootChance = Math.min(0.8, shootChance); // Cap at 80% - very frequent shooting
+            
+            if (Math.random() < shootChance) {
+                // Calculate shot speed based on level - much faster
+                var shotSpeed = 4.0 + (level * 0.3); // Much faster shots at higher levels
+                shotSpeed = Math.min(8.0, shotSpeed); // Cap maximum speed - very fast
+                
+                // Add slight aiming variation based on level
+                var aimVariation = (Math.random() - 0.5) * (0.4 - (level * 0.03));
+                aimVariation = Math.max(0.02, aimVariation); // Minimum variation - more accurate
+                
+                enemyShots.push({
+                    x: enemy.posX + enemy.w / 2 - 4,
+                    y: enemy.posY + enemy.h,
+                    speed: shotSpeed,
+                    vx: aimVariation,
+                    img: enemyShotImage
+                });
+                
+                this.markEnemyShot(enemy);
             }
         },
         
-        // Check if enemy can shoot (with delay and staggering)
+        // Set initial shooting delays for much faster shooting
+        setInitialShootingDelays: function(waveLevel) {
+            for (var i = 0; i < this.enemies.length; i++) {
+                var enemy = this.enemies[i];
+                // Much shorter delays - enemies start shooting quickly
+                enemy.shootActivationTime = Date.now() + (500 + (i * 50) + (waveLevel * 20));
+                enemy.lastShotTime = 0;
+                enemy.staggeredShotDelay = (i * 100) + rand(200); // Much shorter stagger delays
+            }
+        },
+        
+        // Check if enemy can shoot - much faster shooting
         canEnemyShoot: function(enemy) {
             var now = Date.now();
             
@@ -1194,18 +1289,18 @@ var game = (function () {
                 return false;
             }
             
-            // Stagger shooting between enemies
+            // Much shorter shooting intervals
             var timeSinceLastShot = now - enemy.lastShotTime;
-            var baseShotInterval = 1500 - (currentWave * 50); // Faster shooting in later waves
-            var minInterval = Math.max(600, baseShotInterval); // Minimum interval cap
+            var baseShotInterval = 600 - (currentWave * 30); // Much faster shooting in later waves
+            var minInterval = Math.max(200, baseShotInterval); // Much shorter minimum interval
             
             return timeSinceLastShot > (minInterval + enemy.staggeredShotDelay);
         },
         
-        // Mark enemy as having shot
+        // Mark enemy as having shot - much faster reset
         markEnemyShot: function(enemy) {
             enemy.lastShotTime = Date.now();
-            enemy.staggeredShotDelay = 500 + rand(800); // Reset with new random delay
+            enemy.staggeredShotDelay = 100 + rand(300); // Much shorter reset delay for rapid fire
         },
         
         // Remove dead enemy from formation
@@ -1231,7 +1326,18 @@ var game = (function () {
         this.w = 50;
         this.h = 66;
         this.posX = (canvas.width / 2) - (this.w / 2);
-        this.posY = canvas.height - this.h - 36;
+        this.posY = canvas.height - this.h - 10;
+        
+        // Animation properties for dynamic movement
+        this.breathOffset = 0;
+        this.breathSpeed = 0.002;
+        this.breathTime = 0;
+        this.baseY = this.posY;
+        this.shootAnimation = 0;
+        this.shootAnimationSpeed = 0.3;
+        this.pulseScale = 1;
+        this.pulseSpeed = 0.001;
+        this.pulseTime = 0;
     }
 
     function Enemy(isBoss) {
@@ -1246,9 +1352,9 @@ var game = (function () {
         this.h = this.isBoss ? 86 : 50;
         this.posX = rand(Math.max(1, canvas.width - this.w));
         this.posY = -rand(250) - 40;
-        this.downSpeed = this.isBoss ? (0.15 + level * 0.02) : (0.2 + level * 0.03);
+        this.downSpeed = this.isBoss ? (0.4 + level * 0.05) : (0.6 + level * 0.08); // Moderately faster vertical movement
         this.hDir = Math.random() < 0.5 ? -1 : 1;
-        this.hSpeed = (this.isBoss ? 0.3 : 0.4) + (level * 0.03) + Math.random() * 0.3;
+        this.hSpeed = (this.isBoss ? 1.2 : 1.8) + (level * 0.1) + Math.random() * 0.5; // Moderately faster horizontal movement
         this.phase = 40 + rand(120);
         this.phaseTick = 0;
         this.life = this.isBoss ? (8 + level * 2) : (2 + Math.floor(level / 2));
@@ -1291,16 +1397,16 @@ var game = (function () {
                 this.image = this.imageSet[this.frame];
             }
             
-            // Simplified shooting for formation enemies
+            // Enhanced shooting for formation enemies - much faster
             if (this.isInFormation) {
-                // Check if enemy can shoot (with delay)
+                // Check if enemy can shoot (with much shorter delay)
                 var now = Date.now();
-                if (!this.lastShotTime || now - this.lastShotTime > 5000) { // 5 second cooldown
-                    if (Math.random() < 0.08) { // 8% chance per cooldown
+                if (!this.lastShotTime || now - this.lastShotTime > 800) { // 0.8 second cooldown - much faster
+                    if (Math.random() < 0.4) { // 40% chance per cooldown - much higher
                         enemyShots.push({
                             x: this.posX + this.w / 2 - 4,
                             y: this.posY + this.h,
-                            speed: 1.6 + level * 0.04,
+                            speed: 4.0 + level * 0.2, // Much faster shots
                             img: enemyShotImage
                         });
                         this.lastShotTime = now;
@@ -2501,9 +2607,23 @@ var game = (function () {
 
     function playerAction() {
         var pw = spriteW(player.image, player.w);
+        var ph = spriteH(player.image, player.h);
         var moveSpeed = isPowerUpActive("speed") ? (player.speed * 2) : player.speed;
+        
+        // Horizontal movement
         if (keyPressed.left && player.posX > 5) { player.posX -= moveSpeed; }
         if (keyPressed.right && player.posX < (canvas.width - pw - 5)) { player.posX += moveSpeed; }
+        
+        // Vertical movement with limits (approximately one body height up/down)
+        var minY = canvas.height - player.h - 10 - player.h; // One body height up from default position
+        var maxY = canvas.height - player.h - 10; // Default position (bottom)
+        
+        if (keyPressed.up && player.posY > minY) { 
+            player.posY -= moveSpeed * 0.7; // Slightly slower vertical movement
+        }
+        if (keyPressed.down && player.posY < maxY) { 
+            player.posY += moveSpeed * 0.7; // Slightly slower vertical movement
+        }
         if (keyPressed.fire && !fireLock) {
             var now = Date.now();
             if (now >= nextPlayerShot) {
@@ -2865,7 +2985,28 @@ var game = (function () {
             bufferctx.fillStyle = "rgba(80,255,140,0.25)";
             bufferctx.fillRect(player.posX + 12, player.posY + player.h - 4, 24, 12);
         }
-        bufferctx.drawImage(player.image, player.posX, player.posY);
+        // Update player animation
+        updatePlayerAnimation();
+        
+        // Draw player with dynamic animations
+        var drawX = player.renderX || player.posX;
+        var drawY = player.renderY || player.posY;
+        var drawW = player.w * player.pulseScale;
+        var drawH = player.h * player.pulseScale;
+        var offsetX = (player.w - drawW) / 2;
+        var offsetY = (player.h - drawH) / 2;
+        
+        bufferctx.save();
+        
+        // Apply shoot animation effect
+        if (player.shootAnimation > 0) {
+            bufferctx.globalAlpha = 0.7 + player.shootAnimation * 0.3;
+        }
+        
+        // Draw scaled player
+        bufferctx.drawImage(player.image, drawX + offsetX, drawY + offsetY, drawW, drawH);
+        
+        bufferctx.restore();
         if (isPowerUpActive("shield")) {
             bufferctx.strokeStyle = "rgba(255,233,140,0.95)";
             bufferctx.lineWidth = 2;
@@ -2933,6 +3074,27 @@ var game = (function () {
         drawWaveAnnouncement();
         drawHud();
         draw();
+    }
+
+    function updatePlayerAnimation() {
+        if (!player || player.dead) return;
+        
+        // Update breathing animation (gentle up-down movement)
+        player.breathTime += player.breathSpeed;
+        player.breathOffset = Math.sin(player.breathTime) * 2; // 2 pixels breathing
+        
+        // Update pulse animation (subtle scale change)
+        player.pulseTime += player.pulseSpeed;
+        player.pulseScale = 1 + Math.sin(player.pulseTime) * 0.02; // 2% scale variation
+        
+        // Update shoot animation decay
+        if (player.shootAnimation > 0) {
+            player.shootAnimation -= player.shootAnimationSpeed;
+        }
+        
+        // Apply animations to render position
+        player.renderX = player.posX;
+        player.renderY = player.baseY + player.breathOffset;
     }
 
     function draw() {
