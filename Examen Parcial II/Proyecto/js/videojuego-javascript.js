@@ -270,7 +270,7 @@ var game = (function () {
     var gameState = GAME_STATE.SPLASH;
     var isFirstStart = true;
     var playerName = "jugador";
-    var pauseOptions = ["REINICIAR NIVEL", "PANTALLA INICIAL"];
+    var pauseOptions = ["CONTINUAR", "REINICIAR NIVEL", "PANTALLA INICIAL"];
     var pauseSelection = 0;
     var activePowerUps = { triple: 0, shield: 0, speed: 0 };
     var powerUpDurations = { triple: 8000, shield: 5000, speed: 6000 };
@@ -953,9 +953,9 @@ var game = (function () {
             this.time = 0;
             
             // Apply difficulty scaling
-            this.baseSpeed = 0.8 + (waveLevel * 0.15);
-            this.oscillationAmount = 120 + (waveLevel * 10);
-            this.downwardDrift = 0.015 + (waveLevel * 0.005);
+            this.baseSpeed = 0.3 + (waveLevel * 0.04);
+            this.oscillationAmount = 60 + (waveLevel * 5);
+            this.downwardDrift = 0.08 + (waveLevel * 0.015); // Noticeable downward drift
             
             // Position enemies in formation
             this.positionEnemiesInFormation();
@@ -1101,18 +1101,17 @@ var game = (function () {
             }
         },
         
-        // Update formation center with complex movement patterns
+        // Update formation center — horizontal movement only
         updateFormationCenter: function() {
             // Primary oscillating horizontal movement
             var primaryHorizontal = Math.sin(this.time * this.baseSpeed) * this.oscillationAmount;
             
             // Secondary lateral movement (figure-8 pattern)
             var secondaryHorizontal = Math.sin(this.time * this.baseSpeed * 2) * (this.oscillationAmount * 0.3);
-            var verticalMovement = Math.cos(this.time * this.baseSpeed * 1.5) * 20;
             
-            // Combine movements for complex pattern
+            // Horizontal movement + slow downward drift
             this.centerX = (canvas.width / 2) + primaryHorizontal + secondaryHorizontal;
-            this.centerY += this.downwardDrift + (verticalMovement * 0.1);
+            this.centerY += this.downwardDrift;
             
             // Keep formation within bounds with smooth bouncing
             var margin = 100;
@@ -1125,7 +1124,7 @@ var game = (function () {
             }
         },
         
-        // Evasion behavior - formation reacts to player position
+        // Evasion behavior — horizontal only
         updateEvasionBehavior: function() {
             if (!player || player.dead) return;
             
@@ -1133,55 +1132,42 @@ var game = (function () {
             var formationCenterX = this.centerX;
             var distance = Math.abs(playerCenterX - formationCenterX);
             
-            // If player is close, formation tries to evade
+            // If player is close, formation tries to evade horizontally
             if (distance < 150) {
-                var evasionStrength = (150 - distance) / 150; // 0 to 1
+                var evasionStrength = (150 - distance) / 150;
                 var evasionDirection = (formationCenterX < playerCenterX) ? -1 : 1;
-                
-                // Apply evasion movement
                 this.centerX += evasionDirection * evasionStrength * 2;
-                
-                // Add vertical evasion when player is directly below
-                if (player.posY > this.centerY + 100) {
-                    this.centerY += evasionStrength * 0.5;
-                }
             }
         },
         
-        // Update individual enemy position with additional movement
+        // Update individual enemy position — horizontal movement only
         updateEnemyPosition: function(enemy, index) {
             // Base formation position
             var baseX = this.centerX + enemy.formationOffsetX;
             var baseY = this.centerY + enemy.formationOffsetY;
             
-            // Individual enemy movement (dodging behavior)
+            // Individual horizontal movement only
             var individualOffsetX = Math.sin(this.time * 2 + index * 0.5) * 8;
-            var individualOffsetY = Math.cos(this.time * 3 + index * 0.3) * 5;
             
-            // Random micro-movements for more organic feel
-            if (Math.random() < 0.02) { // 2% chance per frame
+            // Random horizontal micro-movements
+            if (Math.random() < 0.02) {
                 enemy.dodgeX = (Math.random() - 0.5) * 15;
-                enemy.dodgeY = (Math.random() - 0.5) * 10;
                 enemy.dodgeDecay = 0.95;
             }
             
             // Apply dodge with decay
             if (enemy.dodgeX !== undefined) {
                 individualOffsetX += enemy.dodgeX;
-                individualOffsetY += enemy.dodgeY;
                 enemy.dodgeX *= enemy.dodgeDecay;
-                enemy.dodgeY *= enemy.dodgeDecay;
                 
-                // Remove dodge when it's too small
-                if (Math.abs(enemy.dodgeX) < 0.5 && Math.abs(enemy.dodgeY) < 0.5) {
+                if (Math.abs(enemy.dodgeX) < 0.5) {
                     enemy.dodgeX = undefined;
-                    enemy.dodgeY = undefined;
                 }
             }
             
-            // Final position calculation
+            // Final position calculation — Y stays fixed at formation position
             enemy.posX = baseX + individualOffsetX;
-            enemy.posY = baseY + individualOffsetY;
+            enemy.posY = baseY;
             
             // Keep enemies within canvas bounds
             enemy.posX = Math.max(0, Math.min(canvas.width - enemy.w, enemy.posX));
@@ -1245,7 +1231,7 @@ var game = (function () {
         this.w = 50;
         this.h = 66;
         this.posX = (canvas.width / 2) - (this.w / 2);
-        this.posY = canvas.height - this.h - 10;
+        this.posY = canvas.height - this.h - 36;
     }
 
     function Enemy(isBoss) {
@@ -1260,15 +1246,15 @@ var game = (function () {
         this.h = this.isBoss ? 86 : 50;
         this.posX = rand(Math.max(1, canvas.width - this.w));
         this.posY = -rand(250) - 40;
-        this.downSpeed = this.isBoss ? (0.45 + level * 0.05) : (0.8 + level * 0.08);
+        this.downSpeed = this.isBoss ? (0.15 + level * 0.02) : (0.2 + level * 0.03);
         this.hDir = Math.random() < 0.5 ? -1 : 1;
-        this.hSpeed = (this.isBoss ? 0.8 : 1.2) + (level * 0.08) + Math.random();
+        this.hSpeed = (this.isBoss ? 0.3 : 0.4) + (level * 0.03) + Math.random() * 0.3;
         this.phase = 40 + rand(120);
         this.phaseTick = 0;
         this.life = this.isBoss ? (8 + level * 2) : (2 + Math.floor(level / 2));
         this.pointsToKill = this.isBoss ? (40 + level * 7) : (6 + level * 2);
         this.spawnTime = Date.now();
-        this.shootDelay = 1200 + rand(800);
+        this.shootDelay = 3500 + rand(2000);
         
         // Formation properties
         this.formationOffsetX = 0;
@@ -1280,6 +1266,9 @@ var game = (function () {
         this.shootActivationTime = 0;
         this.lastShotTime = 0;
         this.staggeredShotDelay = 0;
+        
+        // Hit flash properties
+        this.hitFlashUntil = 0;
     }
 
     Enemy.prototype.update = function () {
@@ -1306,12 +1295,12 @@ var game = (function () {
             if (this.isInFormation) {
                 // Check if enemy can shoot (with delay)
                 var now = Date.now();
-                if (!this.lastShotTime || now - this.lastShotTime > 2000) { // 2 second cooldown
-                    if (Math.random() < 0.3) { // 30% chance per cooldown
+                if (!this.lastShotTime || now - this.lastShotTime > 5000) { // 5 second cooldown
+                    if (Math.random() < 0.08) { // 8% chance per cooldown
                         enemyShots.push({
                             x: this.posX + this.w / 2 - 4,
                             y: this.posY + this.h,
-                            speed: 3.2 + level * 0.1,
+                            speed: 1.6 + level * 0.04,
                             img: enemyShotImage
                         });
                         this.lastShotTime = now;
@@ -1322,13 +1311,13 @@ var game = (function () {
         }
         
         // Legacy movement for non-formation enemies (bosses, etc.)
-        this.posY += this.downSpeed;
+        this.posY += this.downSpeed * 0.6; // Noticeable downward drift
         this.phaseTick++;
         if (this.phaseTick > this.phase) {
             this.phaseTick = 0;
             this.phase = 40 + rand(120);
             if (Math.random() < 0.45) { this.hDir *= -1; }
-            this.hSpeed = (this.isBoss ? 0.8 : 1.1) + (level * 0.08) + Math.random() * 1.2;
+            this.hSpeed = (this.isBoss ? 0.3 : 0.35) + (level * 0.03) + Math.random() * 0.4;
         }
         this.posX += this.hSpeed * this.hDir;
         if (this.posX < 0) { this.posX = 0; this.hDir = 1; }
@@ -1344,7 +1333,7 @@ var game = (function () {
         // Legacy shooting for non-formation enemies
         if (!this.spawnTime) {
             this.spawnTime = Date.now();
-            this.shootDelay = 700 + rand(800);
+            this.shootDelay = 3000 + rand(2000);
         }
 
         if (Date.now() - this.spawnTime < this.shootDelay) {
@@ -1356,13 +1345,13 @@ var game = (function () {
         if (this.shotCooldown <= 0) {
             var baseCooldown = typeof this.customShootInterval === "number"
                 ? this.customShootInterval
-                : ((this.isBoss ? 40 : 80) + rand(100));
+                : ((this.isBoss ? 90 : 180) + rand(200));
 
-            if (Math.random() < 0.3) { // 30% probability
+            if (Math.random() < 0.08) { // 8% probability
                 enemyShots.push({
                     x: this.posX + this.w / 2 - 4,
                     y: this.posY + this.h,
-                    speed: 3.2 + level * 0.1,
+                    speed: 1.6 + level * 0.04,
                     img: enemyShotImage
                 });
             }
@@ -1476,7 +1465,7 @@ var game = (function () {
                     enemyShots.push({
                         x: this.posX + this.w / 2 - 4 + (i * 20),
                         y: this.posY + this.h,
-                        speed: 3.5 + level * 0.1,
+                        speed: 1.8 + level * 0.04,
                         img: enemyShotImage
                     });
                 }
@@ -1485,12 +1474,12 @@ var game = (function () {
                 enemyShots.push({
                     x: this.posX + this.w / 2 - 4,
                     y: this.posY + this.h,
-                    speed: 3.2 + level * 0.1,
+                    speed: 1.6 + level * 0.04,
                     img: enemyShotImage
                 });
             }
             
-            this.shotCooldown = this.customShootInterval || 60;
+            this.shotCooldown = this.customShootInterval || 140;
         }
     };
     
@@ -1532,17 +1521,17 @@ var game = (function () {
                 // Boss wave - doesn't use formation system
                 waves.push({
                     enemyCount: 1,
-                    enemySpeed: 1.6,
-                    shootInterval: 40,
+                    enemySpeed: 0.5,
+                    shootInterval: 120,
                     formationPattern: "v-shape",
                     boss: true
                 });
             } else {
                 // Regular waves with formation system
                 waves.push({
-                    enemyCount: 6 + ((i - 1) * 2), // Progressive enemy count
-                    enemySpeed: 0.8 + (i * 0.15), // Progressive speed
-                    shootInterval: Math.max(40, 120 - (i * 15)), // Faster shooting in later waves
+                    enemyCount: 5 + ((i - 1) * 2), // Progressive enemy count (slightly fewer)
+                    enemySpeed: 0.2 + (i * 0.05), // Progressive speed (very slow)
+                    shootInterval: Math.max(120, 250 - (i * 20)), // Much slower shooting
                     formationPattern: patterns[(i - 1) % patterns.length],
                     boss: false
                 });
@@ -1594,8 +1583,8 @@ var game = (function () {
             e.posY = -rand(200) - 40;
     
             // velocidad base
-            e.downSpeed = cfg.enemySpeed;
-            e.hSpeed = 1 + (cfg.enemySpeed * 0.6);
+            e.downSpeed = cfg.enemySpeed * 0.5;
+            e.hSpeed = 0.3 + (cfg.enemySpeed * 0.3);
     
             // movimiento lateral tipo formación
             e.baseX = e.posX;
@@ -1915,9 +1904,9 @@ var game = (function () {
         var btnRestart = document.getElementById("btn-volver-jugar");
         if (btnPlay) { btnPlay.classList.add("hidden"); }
         if (btnRestart) { btnRestart.classList.remove("hidden"); }
+        // Hide name input — it's redundant since name is set from the left panel
         if (input) {
-            input.classList.remove("hidden");
-            input.value = getPlayerName();
+            input.classList.add("hidden");
         }
     }
 
@@ -2385,6 +2374,20 @@ var game = (function () {
             bufferctx.fillText("LEVEL CLEARED!", 210, 36);
         }
 
+        // Pause button indicator at top-right corner
+        bufferctx.shadowBlur = 0;
+        bufferctx.fillStyle = "rgba(0,0,0,0.5)";
+        bufferctx.fillRect(canvas.width - 110, 8, 100, 28);
+        bufferctx.strokeStyle = "#00ff00";
+        bufferctx.lineWidth = 1;
+        bufferctx.strokeRect(canvas.width - 110, 8, 100, 28);
+        bufferctx.fillStyle = "#00ff00";
+        bufferctx.font = "9px 'Press Start 2P', monospace";
+        bufferctx.textAlign = "center";
+        bufferctx.textBaseline = "middle";
+        bufferctx.fillText("II PAUSA", canvas.width - 60, 22);
+        bufferctx.textBaseline = "top";
+
         // Active power-ups HUD bottom-left.
         var px = 60;
         var py = canvas.height - 78;
@@ -2431,7 +2434,7 @@ var game = (function () {
         var w = canvas.width;
         var h = canvas.height;
         var panelW = 520;
-        var panelH = 280;
+        var panelH = 340;
         var x = (w - panelW) / 2;
         var y = (h - panelH) / 2;
         var pulse = 0.55 + Math.abs(Math.sin(Date.now() * 0.006)) * 0.45;
@@ -2456,7 +2459,7 @@ var game = (function () {
         c.globalAlpha = 1;
 
         for (var i = 0; i < pauseOptions.length; i++) {
-            var oy = y + 130 + i * 58;
+            var oy = y + 120 + i * 52;
             var selected = i === pauseSelection;
             c.font = "14px 'Press Start 2P', monospace";
             c.fillStyle = selected ? "#ffffff" : "#00ff88";
@@ -2472,7 +2475,7 @@ var game = (function () {
 
         c.font = "10px 'Press Start 2P', monospace";
         c.fillStyle = "#9aff9a";
-        c.fillText("P: CONTINUAR | ENTER: ACEPTAR", w / 2, y + panelH - 28);
+        c.fillText("ESC/P: CONTINUAR | ENTER: ACEPTAR", w / 2, y + panelH - 28);
         c.restore();
     }
 
@@ -2524,7 +2527,7 @@ var game = (function () {
     function maybeDropHeart(x, y) {
         if (Math.random() < 0.18) {
             var targetX = Math.max(8, Math.min(canvas.width - 30, x));
-            heartDrops.push({ x: targetX, y: -24, speed: 2.1 + Math.random() * 1.1, w: 22, h: 22 });
+            heartDrops.push({ x: targetX, y: -24, speed: 1.2 + Math.random() * 0.6, w: 22, h: 22 });
         }
     }
 
@@ -2538,7 +2541,7 @@ var game = (function () {
             y: y,
             w: 20,
             h: 20,
-            speed: 2
+            speed: 1.2
         });
     }
 
@@ -2635,10 +2638,31 @@ var game = (function () {
 
     function updateEnemies() {
         var pw = spriteW(player.image, player.w), ph = spriteH(player.image, player.h);
+        var now = Date.now();
         for (var i = enemies.length - 1; i >= 0; i--) {
             var e = enemies[i];
             e.update();
-            bufferctx.drawImage(e.image, e.posX, e.posY);
+            // Draw enemy with hit flash effect
+            if (e.hitFlashUntil && now < e.hitFlashUntil) {
+                // Save context and apply red tint overlay
+                bufferctx.drawImage(e.image, e.posX, e.posY);
+                bufferctx.save();
+                bufferctx.globalCompositeOperation = "source-atop";
+                var flashAlpha = 0.6 + Math.sin((now - (e.hitFlashUntil - 200)) * 0.05) * 0.3;
+                bufferctx.fillStyle = "rgba(255, 0, 0, " + Math.max(0.3, flashAlpha).toFixed(2) + ")";
+                bufferctx.fillRect(e.posX, e.posY, e.w, e.h);
+                bufferctx.restore();
+                // Also draw a red border glow around the enemy
+                bufferctx.save();
+                bufferctx.strokeStyle = "#FF0000";
+                bufferctx.lineWidth = 2;
+                bufferctx.shadowColor = "#FF0000";
+                bufferctx.shadowBlur = 12;
+                bufferctx.strokeRect(e.posX - 2, e.posY - 2, e.w + 4, e.h + 4);
+                bufferctx.restore();
+            } else {
+                bufferctx.drawImage(e.image, e.posX, e.posY);
+            }
             if (e.posY > canvas.height + 30) {
                 enemies.splice(i, 1);
                 continue;
@@ -2661,6 +2685,10 @@ var game = (function () {
                 if (s.x >= e.posX && s.x <= e.posX + e.w && s.y >= e.posY && s.y <= e.posY + e.h) {
                     e.life -= 1;
                     hitEnemy = true;
+                    // Trigger hit flash on the enemy
+                    e.hitFlashUntil = Date.now() + 200;
+                    // Play hit sound for audio feedback
+                    AudioManager.playHitEnemy();
                     if (e.isBoss && bossActive && e === currentBoss) {
                         // Boss damage system - reduce HP instead of life
                         if (!e.shielded) {
@@ -2679,8 +2707,8 @@ var game = (function () {
                         // Regular enemy death
                         e.dead = true;
                         
-                        // Play enemy hit sound
-                        AudioManager.playHitEnemy();
+                        // Play explosion sound for kill
+                        AudioManager.playExplosionSmall();
                         
                         // Update combo and calculate score with multiplier
                         increaseCombo();
@@ -2737,7 +2765,22 @@ var game = (function () {
             var es = enemyShots[k];
             es.y += es.speed;
             if (es.y > canvas.height + 10) { enemyShots.splice(k, 1); continue; }
-            bufferctx.drawImage(es.img, es.x, es.y);
+            // Draw enemy bullet with bright glow effect (red/orange) for visibility
+            bufferctx.save();
+            // Outer glow
+            bufferctx.shadowColor = "#FF3300";
+            bufferctx.shadowBlur = 14;
+            bufferctx.fillStyle = "#FF4400";
+            bufferctx.beginPath();
+            bufferctx.arc(es.x + 4, es.y + 4, 5, 0, Math.PI * 2);
+            bufferctx.fill();
+            // Inner bright core
+            bufferctx.shadowBlur = 0;
+            bufferctx.fillStyle = "#FFDD00";
+            bufferctx.beginPath();
+            bufferctx.arc(es.x + 4, es.y + 4, 2.5, 0, Math.PI * 2);
+            bufferctx.fill();
+            bufferctx.restore();
             if (es.x >= player.posX && es.x <= player.posX + pw && es.y >= player.posY && es.y <= player.posY + ph) {
                 enemyShots.splice(k, 1);
                 hurtPlayer();
@@ -2879,7 +2922,7 @@ var game = (function () {
             var ratio = Math.max(0, Math.min(1, remain / powerUpDurations.triple));
             var tw = 54;
             var tx = player.posX + (player.w - tw) / 2;
-            var ty = player.posY + player.h + 8;
+            var ty = player.posY + player.h + 4;
             bufferctx.strokeStyle = "#70e7ff";
             bufferctx.lineWidth = 1;
             bufferctx.strokeRect(tx, ty, tw, 5);
@@ -2928,7 +2971,26 @@ var game = (function () {
     function saveFinalScore(finalScore) {
         flashRankingIfNewTop(finalScore);
         var list = readScoreRecords();
-        list.push({ name: getPlayerName(), score: finalScore, date: formatDateTime(), enemiesKilled: enemiesKilled, level: level });
+        var currentName = getPlayerName();
+        // Only keep the highest score per player name
+        var existingIndex = -1;
+        for (var i = 0; i < list.length; i++) {
+            if (list[i].name === currentName) {
+                existingIndex = i;
+                break;
+            }
+        }
+        if (existingIndex >= 0) {
+            // Player already has a record — only update if new score is higher
+            if (finalScore > parseInt(list[existingIndex].score, 10)) {
+                list[existingIndex].score = finalScore;
+                list[existingIndex].date = formatDateTime();
+                list[existingIndex].enemiesKilled = enemiesKilled;
+                list[existingIndex].level = level;
+            }
+        } else {
+            list.push({ name: currentName, score: finalScore, date: formatDateTime(), enemiesKilled: enemiesKilled, level: level });
+        }
         list.sort(function (a, b) { return parseInt(b.score, 10) - parseInt(a.score, 10); });
         list = list.slice(0, 5);
         writeScoreRecords(list);
@@ -2988,7 +3050,7 @@ var game = (function () {
             e.preventDefault();
             return;
         }
-        if (sessionActive && !gameOver && key === 80) {
+        if (sessionActive && !gameOver && (key === 80 || key === 27)) {
             e.preventDefault();
             paused = !paused;
             keyPressed = {};
@@ -2999,7 +3061,9 @@ var game = (function () {
             if (key === 40) { e.preventDefault(); pauseSelection = (pauseSelection + 1) % pauseOptions.length; return; }
             if (key === 13 || key === 108) {
                 e.preventDefault();
-                if (pauseSelection === 0) { restartCurrentLevel(); } else { backToStartMenu(); }
+                if (pauseSelection === 0) { paused = false; keyPressed = {}; }
+                else if (pauseSelection === 1) { restartCurrentLevel(); }
+                else { backToStartMenu(); }
                 return;
             }
             if (key === 82) { e.preventDefault(); restartCurrentLevel(); return; } // R quick restart level
@@ -3042,9 +3106,21 @@ var game = (function () {
             var rect = canvas.getBoundingClientRect();
             var px = ev.clientX - rect.left;
             var py = ev.clientY - rect.top;
+            // Click on pause button in HUD
+            if (sessionActive && !gameOver && !paused) {
+                var scaleX = canvas.width / rect.width;
+                var scaleY = canvas.height / rect.height;
+                var cx = px * scaleX;
+                var cy = py * scaleY;
+                if (cx >= canvas.width - 110 && cx <= canvas.width - 10 && cy >= 8 && cy <= 36) {
+                    paused = true;
+                    keyPressed = {};
+                    return;
+                }
+            }
             if (paused) {
                 var panelW = 520;
-                var panelH = 280;
+                var panelH = 340;
                 var x = (canvas.width - panelW) / 2;
                 var y = (canvas.height - panelH) / 2;
                 var firstTop = y + 102;
@@ -3054,7 +3130,9 @@ var game = (function () {
                     var by = firstTop + i * 58;
                     if (px >= x + 62 && px <= x + 62 + boxW && py >= by && py <= by + boxH) {
                         pauseSelection = i;
-                        if (i === 0) { restartCurrentLevel(); } else { backToStartMenu(); }
+                        if (i === 0) { paused = false; keyPressed = {}; }
+                        else if (i === 1) { restartCurrentLevel(); }
+                        else { backToStartMenu(); }
                         return;
                     }
                 }
