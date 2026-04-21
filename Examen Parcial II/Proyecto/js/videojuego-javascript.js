@@ -367,8 +367,14 @@ var game = (function () {
         playerShotImage.src = "images/disparo_bueno.png";
         enemyShotImage = new Image();
         enemyShotImage.src = "images/disparo_malo.png";
-        playerImage = new Image();
-        playerImage.src = "images/bueno.png";
+        // Load 4 player animation frames
+        playerFrames = [];
+        for (var i = 1; i <= 4; i++) {
+            var frame = new Image();
+            frame.src = "images/bueno" + i + ".png";
+            playerFrames.push(frame);
+        }
+        playerImage = playerFrames[0]; // Default to first frame for compatibility
         playerKilledImage = new Image();
         playerKilledImage.src = "images/bueno_muerto.png";
         heartImage = new Image();
@@ -1381,6 +1387,13 @@ var game = (function () {
         this.breathTime = 0;
         this.baseY = this.posY;
         this.shootAnimation = 0;
+        
+        // Frame-based animation properties
+        this.frames = playerFrames;
+        this.currentFrame = 0;
+        this.frameTimer = Date.now(); // Initialize timer
+        this.frameInterval = 120; // Change frame every 120ms
+        this.isMoving = false;
         this.shootAnimationSpeed = 0.3;
         this.pulseScale = 1;
         this.pulseSpeed = 0.001;
@@ -2724,9 +2737,18 @@ var game = (function () {
         var ph = spriteH(player.image, player.h);
         var moveSpeed = isPowerUpActive("speed") ? (player.speed * 2) : player.speed;
         
+        // Check if player is moving
+        player.isMoving = false;
+        
         // Horizontal movement
-        if (keyPressed.left && player.posX > 5) { player.posX -= moveSpeed; }
-        if (keyPressed.right && player.posX < (canvas.width - pw - 5)) { player.posX += moveSpeed; }
+        if (keyPressed.left && player.posX > 5) { 
+            player.posX -= moveSpeed; 
+            player.isMoving = true;
+        }
+        if (keyPressed.right && player.posX < (canvas.width - pw - 5)) { 
+            player.posX += moveSpeed; 
+            player.isMoving = true;
+        }
         
         // Vertical movement with limits (approximately one body height up/down)
         var minY = canvas.height - player.h - 10 - player.h; // One body height up from default position
@@ -2734,9 +2756,11 @@ var game = (function () {
         
         if (keyPressed.up && player.posY > minY) { 
             player.posY -= moveSpeed * 0.7; // Slightly slower vertical movement
+            player.isMoving = true;
         }
         if (keyPressed.down && player.posY < maxY) { 
             player.posY += moveSpeed * 0.7; // Slightly slower vertical movement
+            player.isMoving = true;
         }
         if (keyPressed.fire && !fireLock) {
             var now = Date.now();
@@ -3204,6 +3228,18 @@ var game = (function () {
         // Update shoot animation decay
         if (player.shootAnimation > 0) {
             player.shootAnimation -= player.shootAnimationSpeed;
+        }
+        
+        // Update frame-based animation
+        var now = Date.now();
+        if (player.isMoving && now - player.frameTimer > player.frameInterval) {
+            player.frameTimer = now;
+            player.currentFrame = (player.currentFrame + 1) % player.frames.length;
+            player.image = player.frames[player.currentFrame];
+        } else if (!player.isMoving) {
+            // Reset to first frame when idle
+            player.currentFrame = 0;
+            player.image = player.frames[0];
         }
         
         // Apply animations to render position
