@@ -2726,7 +2726,7 @@ var game = (function () {
 
     function firePlayerShot(vx) {
         var pw = spriteW(player.image, player.w);
-        playerShots.push({ x: player.posX + pw / 2 - 4, y: player.posY, speed: 7.5, vx: vx || 0, img: playerShotImage });
+        playerShots.push({ x: player.posX + pw / 2 - 28, y: player.posY - 20, speed: 7.5, vx: vx || 0, img: playerShotImage });
         
         // Play player shoot sound
         AudioManager.playPlayerShoot();
