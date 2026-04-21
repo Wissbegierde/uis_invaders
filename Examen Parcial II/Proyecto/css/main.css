@@ -1,27 +1,77 @@
 body {
-    background: #ccc;
-    color: #333;
+    background-color: #000;
+    color: #ffffff;
     font: 14px 'Press Start 2P', 'Arial', sans-serif;
     text-align: center;
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+    text-shadow: 0 0 8px rgba(255, 255, 255, 0.8),
+                 0 0 12px rgba(255, 255, 255, 0.6),
+                 0 0 16px rgba(255, 255, 255, 0.4);
+    position: relative;
+    overflow: hidden;
+}
+
+/* Dynamic space background with parallax effect */
+body::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 110%;
+    height: 110%;
+    background-image: url('../images/space_background.jpg');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    z-index: -1;
+    animation: spaceParallax 120s linear infinite;
+}
+
+@keyframes spaceParallax {
+    0% {
+        transform: translate(0, 0) scale(1);
+    }
+    25% {
+        transform: translate(-2%, -1%) scale(1.02);
+    }
+    50% {
+        transform: translate(-1%, 1%) scale(1.01);
+    }
+    75% {
+        transform: translate(1%, -0.5%) scale(1.015);
+    }
+    100% {
+        transform: translate(0, 0) scale(1);
+    }
 }
 a {
-    color: #506e2f;
+    color: #00ff88;
     text-decoration: none;
+    text-shadow: 0 0 6px rgba(0, 255, 136, 0.8),
+                 0 0 10px rgba(0, 255, 136, 0.6);
 }
 a:hover {
-    color: #ff4500;
+    color: #00ffcc;
+    text-shadow: 0 0 10px rgba(0, 255, 204, 0.9),
+                 0 0 15px rgba(0, 255, 204, 0.7);
 }
 button.link-button {
     background: none;
     border: none;
-    color: #506e2f;
+    color: #00ff88;
     cursor: pointer;
     font: inherit;
     padding: 0;
     text-decoration: underline;
+    text-shadow: 0 0 6px rgba(0, 255, 136, 0.8),
+                 0 0 10px rgba(0, 255, 136, 0.6);
 }
 button.link-button:hover {
-    color: #ff4500;
+    color: #00ffcc;
+    text-shadow: 0 0 10px rgba(0, 255, 204, 0.9),
+                 0 0 15px rgba(0, 255, 204, 0.7);
 }
 div.contenedor {
     width: 100%;
@@ -43,10 +93,13 @@ div.centro-juego {
 div.juego {
     position: relative;
     display: inline-block;
+    z-index: 10;
 }
 div.juego canvas {
     box-shadow: 0 0 30px #000;
     display: block;
+    position: relative;
+    z-index: 15;
 }
 .overlay-fin {
     position: absolute;
@@ -155,7 +208,7 @@ div.derecha ul#puntuaciones li{
     line-height:1.5em;
     border-bottom:1px solid #aaa;
     box-sizing: border-box;
-    width: 33.33%;
+    width: 50%;
     float: left;
     display: block;
     padding: 8px 4px;
@@ -205,9 +258,10 @@ ul.lista li.titulo {
 .bloque-usuario {
     margin: 16px 0;
     padding: 12px;
-    background: #e8e8e8;
+    background: #1a1a1a;
     border-radius: 8px;
-    border: 1px solid #bbb;
+    border: 1px solid #444;
+    box-shadow: 0 0 15px rgba(0, 0, 0, 0.8);
 }
 .titulo-seccion {
     font-weight: bold;
@@ -219,7 +273,7 @@ ul.lista li.titulo {
     max-width: 240px;
     padding: 6px 8px;
     box-sizing: border-box;
-    border: 1px solid #999;
+    border: 1px solid #b3b3b3;
     border-radius: 4px;
 }
 .nombre-actual {

@@ -528,6 +528,8 @@ var game = (function () {
             var splashElapsed = Date.now() - this.splashStartMs;
             if (splashElapsed >= this.splashTotalMs) {
                 gameState = GAME_STATE.MENU;
+                // Play menu music when transitioning from splash to menu
+                AudioManager.playMenuMusic();
             }
         }
         if (this.mode === "prepare" && Date.now() >= this.readyUntil) {
@@ -867,6 +869,8 @@ var game = (function () {
         if (!this.active) { return false; }
         if (gameState === GAME_STATE.SPLASH) {
             gameState = GAME_STATE.MENU;
+            // Play menu music when skipping splash with key press
+            AudioManager.playMenuMusic();
             return true;
         }
         if (this.mode === "intro") {
@@ -2922,13 +2926,12 @@ var game = (function () {
         if (!list) { return; }
         list.innerHTML = "";
         function add(v, c) { var li = document.createElement("li"); li.textContent = v; if (c) { li.className = c; } list.appendChild(li); }
-        add("Nombre", "cabecera"); add("Puntos", "cabecera"); add("Fecha", "cabecera");
+        add("Nombre", "cabecera"); add("Puntos", "cabecera");
         var top = readScoreRecords();
         for (var i = 0; i < top.length; i++) {
             var cls = i === 0 ? "negrita" : "";
             add(top[i].name || "—", cls);
             add(String(top[i].score), cls);
-            add(top[i].date || "", cls);
         }
     }
 
