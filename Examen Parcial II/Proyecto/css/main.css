@@ -77,6 +77,8 @@ div.contenedor {
     width: 100%;
     max-width: 1680px;
     margin: 0 auto;
+    padding: 10px;
+    box-sizing: border-box;
 }
 div.izquierda, div.derecha {
     width: 280px;
@@ -90,6 +92,94 @@ div.centro-juego {
     text-align: center;
     min-width: 0;
 }
+
+/* Responsive Design */
+@media screen and (max-width: 1400px) {
+    div.izquierda, div.derecha {
+        width: 240px;
+    }
+    div.centro-juego {
+        margin: 0 250px;
+    }
+}
+
+@media screen and (max-width: 1200px) {
+    div.izquierda, div.derecha {
+        width: 200px;
+    }
+    div.centro-juego {
+        margin: 0 210px;
+    }
+}
+
+@media screen and (max-width: 1000px) {
+    div.contenedor {
+        padding: 5px;
+    }
+    div.izquierda, div.derecha {
+        width: 180px;
+    }
+    div.centro-juego {
+        margin: 0 190px;
+    }
+}
+
+@media screen and (max-width: 850px) {
+    div.izquierda, div.derecha {
+        width: 160px;
+    }
+    div.centro-juego {
+        margin: 0 170px;
+    }
+}
+
+@media screen and (max-width: 750px) {
+    div.contenedor {
+        padding: 2px;
+    }
+    div.izquierda, div.derecha {
+        width: 140px;
+    }
+    div.centro-juego {
+        margin: 0 150px;
+    }
+}
+
+@media screen and (max-width: 650px) {
+    div.izquierda, div.derecha {
+        width: 120px;
+    }
+    div.centro-juego {
+        margin: 0 130px;
+    }
+}
+
+@media screen and (max-width: 550px) {
+    div.izquierda, div.derecha {
+        width: 100px;
+    }
+    div.centro-juego {
+        margin: 0 110px;
+    }
+}
+
+@media screen and (max-width: 450px) {
+    div.izquierda, div.derecha {
+        width: 80px;
+    }
+    div.centro-juego {
+        margin: 0 90px;
+    }
+}
+
+@media screen and (max-width: 350px) {
+    div.izquierda, div.derecha {
+        width: 60px;
+    }
+    div.centro-juego {
+        margin: 0 70px;
+    }
+}
 div.juego {
     position: relative;
     display: inline-block;
@@ -100,6 +190,72 @@ div.juego canvas {
     display: block;
     position: relative;
     z-index: 15;
+    max-width: 100%;
+    height: auto;
+}
+
+/* Responsive canvas sizing */
+@media screen and (max-width: 1400px) {
+    div.juego canvas {
+        max-width: 100%;
+        height: auto;
+    }
+}
+
+@media screen and (max-width: 1200px) {
+    div.juego canvas {
+        max-width: 100%;
+        height: auto;
+    }
+}
+
+@media screen and (max-width: 1000px) {
+    div.juego canvas {
+        max-width: 100%;
+        height: auto;
+    }
+}
+
+@media screen and (max-width: 850px) {
+    div.juego canvas {
+        max-width: 100%;
+        height: auto;
+    }
+}
+
+@media screen and (max-width: 750px) {
+    div.juego canvas {
+        max-width: 100%;
+        height: auto;
+    }
+}
+
+@media screen and (max-width: 650px) {
+    div.juego canvas {
+        max-width: 100%;
+        height: auto;
+    }
+}
+
+@media screen and (max-width: 550px) {
+    div.juego canvas {
+        max-width: 100%;
+        height: auto;
+    }
+}
+
+@media screen and (max-width: 450px) {
+    div.juego canvas {
+        max-width: 100%;
+        height: auto;
+    }
+}
+
+@media screen and (max-width: 350px) {
+    div.juego canvas {
+        max-width: 100%;
+        height: auto;
+    }
 }
 .overlay-fin {
     position: absolute;

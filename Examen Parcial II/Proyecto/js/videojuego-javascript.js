@@ -15,6 +15,12 @@ var game = (function () {
 
     var canvas, ctx, buffer, bufferctx;
     var bgMain, bgBoss, playerShotImage, enemyShotImage, playerImage, playerKilledImage, heartImage;
+    
+    // Responsive design variables
+    var originalCanvasWidth = 900;
+    var originalCanvasHeight = 800;
+    var scaleFactor = 1;
+    var gameContainer = null;
     var bgScrollY = 0;
     var starsParallax = [];
     var BG_ASSET_W = 1168;
@@ -2397,10 +2403,19 @@ var game = (function () {
         
         // Draw combo indicator
         var text = "x" + combo.multiplier + " COMBO";
-        var alpha = 1.0;
+        var canvas = null;
+        var ctx = null;
+        var buffer = null;
+        var bufferctx = null;
+        
+        // Responsive design variables
+        var originalCanvasWidth = 900;
+        var originalCanvasHeight = 800;
+        var scaleFactor = 1;
+        var gameContainer = null;
         
         bufferctx.save();
-        bufferctx.globalAlpha = alpha;
+        bufferctx.globalAlpha = 1.0;
         bufferctx.fillStyle = "#FFD700"; // Gold color
         bufferctx.font = "bold 16px 'Press Start 2P'";
         bufferctx.textAlign = "right";
@@ -2518,9 +2533,18 @@ var game = (function () {
     }
 
     function drawHud() {
-        var x = 70;
-        var y = 16;
-        var rowGap = 24;
+        // Responsive HUD positioning
+        var baseX = 70;
+        var baseY = 16;
+        var baseRowGap = 24;
+        var baseFontSize = 10;
+        
+        // Apply scale factor for responsive design
+        var x = baseX * scaleFactor;
+        var y = baseY * scaleFactor;
+        var rowGap = baseRowGap * scaleFactor;
+        var fontSize = Math.max(8, baseFontSize * scaleFactor); // Minimum font size of 8px
+        
         var now = Date.now();
         var progress = killsTargetInLevel > 0 ? (killsInLevel / killsTargetInLevel) : 0;
         if (progress < 0) { progress = 0; }
@@ -2536,25 +2560,27 @@ var game = (function () {
         previousLifeValue = player.life;
 
         bufferctx.save();
-        bufferctx.font = "10px 'Press Start 2P', monospace";
+        bufferctx.font = fontSize + "px 'Press Start 2P', monospace";
         bufferctx.fillStyle = "#00FF00";
-        bufferctx.shadowBlur = 8;
+        bufferctx.shadowBlur = 8 * scaleFactor;
         bufferctx.shadowColor = "#00FF00";
         bufferctx.textBaseline = "top";
 
         // LIVES
         bufferctx.fillText("LIVES:", x, y);
-        var nodeX = x + 52;
+        var nodeX = x + (52 * scaleFactor);
+        var lifeSize = 7 * scaleFactor;
+        var lifeSpacing = 13 * scaleFactor;
         for (var i = 0; i < 3; i++) {
             var alive = i < player.life;
             var blinkOff = (!alive && Math.floor(now / 200) % 2 === 0);
             if (alive) {
                 bufferctx.fillStyle = "#00FF00";
-                bufferctx.fillRect(nodeX + i * 13, y + 1, 7, 14);
+                bufferctx.fillRect(nodeX + i * lifeSpacing, y + scaleFactor, lifeSize, lifeSize * 2);
             } else if (!blinkOff) {
                 bufferctx.strokeStyle = "#ff2a2a";
-                bufferctx.lineWidth = 1;
-                bufferctx.strokeRect(nodeX + i * 13, y + 1, 7, 14);
+                bufferctx.lineWidth = scaleFactor;
+                bufferctx.strokeRect(nodeX + i * lifeSpacing, y + scaleFactor, lifeSize, lifeSize * 2);
             }
         }
 
@@ -2573,22 +2599,22 @@ var game = (function () {
 
         // PROGRESS segmented bar
         var barX = x;
-        var barY = y + rowGap * 5 + 1;
-        var barW = 124;
-        var barH = 12;
+        var barY = y + rowGap * 5 + scaleFactor;
+        var barW = 124 * scaleFactor;
+        var barH = 12 * scaleFactor;
         var segments = 10;
-        var gap = 2;
+        var gap = 2 * scaleFactor;
         var segW = Math.floor((barW - ((segments + 1) * gap)) / segments);
         var filled = Math.floor(progress * segments + 0.0001);
         var fullBlink = progress >= 1 && Math.floor(now / 160) % 2 === 0;
-        bufferctx.fillText("PROGRESS", x, barY - 12);
+        bufferctx.fillText("PROGRESS", x, barY - (12 * scaleFactor));
         bufferctx.strokeStyle = fullBlink ? "#ffffff" : "#00FF00";
-        bufferctx.lineWidth = progress >= 1 ? 2 : 1;
+        bufferctx.lineWidth = progress >= 1 ? (2 * scaleFactor) : scaleFactor;
         bufferctx.strokeRect(barX, barY, barW, barH);
         for (var s = 0; s < segments; s++) {
             var sx = barX + gap + s * (segW + gap);
-            var sy = barY + 2;
-            var sh = barH - 4;
+            var sy = barY + (2 * scaleFactor);
+            var sh = barH - (4 * scaleFactor);
             if (s < filled) {
                 bufferctx.fillStyle = fullBlink ? "#ffffff" : "#00FF00";
                 bufferctx.fillRect(sx, sy, segW, sh);
@@ -3397,12 +3423,50 @@ var game = (function () {
         }
     }
 
+    function setupResponsiveCanvas() {
+        if (!gameContainer || !canvas) return;
+        
+        var containerWidth = gameContainer.offsetWidth;
+        var aspectRatio = originalCanvasHeight / originalCanvasWidth;
+        
+        // Calculate new dimensions maintaining aspect ratio
+        var newWidth = Math.min(containerWidth, originalCanvasWidth);
+        var newHeight = newWidth * aspectRatio;
+        
+        // Apply dimensions to canvas
+        canvas.width = originalCanvasWidth; // Keep internal resolution
+        canvas.height = originalCanvasHeight;
+        canvas.style.width = newWidth + 'px';
+        canvas.style.height = newHeight + 'px';
+        
+        // Update scale factor for responsive calculations
+        scaleFactor = newWidth / originalCanvasWidth;
+        
+        // Update buffer size
+        buffer.width = originalCanvasWidth;
+        buffer.height = originalCanvasHeight;
+        
+        console.log('Canvas resized:', newWidth + 'x' + newHeight, 'Scale:', scaleFactor);
+    }
+    
+    function handleResize() {
+        setupResponsiveCanvas();
+    }
+    
     function init() {
         preloadImages();
-        canvas = document.getElementById("canvas");
-        ctx = canvas.getContext("2d");
-        buffer = document.createElement("canvas");
-        buffer.width = canvas.width;
+        canvas = document.getElementById('canvas');
+        ctx = canvas.getContext('2d');
+        buffer = document.createElement('canvas');
+        bufferctx = buffer.getContext('2d');
+        
+        // Initialize responsive design
+        gameContainer = document.querySelector('.centro-juego');
+        setupResponsiveCanvas();
+        
+        // Add resize listener
+        window.addEventListener('resize', handleResize);
+        window.addEventListener('orientationchange', handleResize);
         buffer.height = canvas.height;
         bufferctx = buffer.getContext("2d");
         initParallaxStars();
