@@ -1473,7 +1473,7 @@ var game = (function () {
             }
         },
         
-        // Update formation center — horizontal movement only
+        // Update formation center — horizontal movement with vertical boundary system
         updateFormationCenter: function() {
             // Primary oscillating horizontal movement
             var primaryHorizontal = Math.sin(this.time * this.baseSpeed) * this.oscillationAmount;
@@ -1481,11 +1481,42 @@ var game = (function () {
             // Secondary lateral movement (figure-8 pattern)
             var secondaryHorizontal = Math.sin(this.time * this.baseSpeed * 2) * (this.oscillationAmount * 0.3);
             
-            // Horizontal movement + slow downward drift
+            // Horizontal movement
             this.centerX = (canvas.width / 2) + primaryHorizontal + secondaryHorizontal;
+            
+            // Vertical boundary system - keep formations in upper 60% of screen
+            var softLowerBoundary = canvas.height * 0.6; // 60% of screen height
+            var preferredUpperZone = canvas.height * 0.3; // Preferred center area (30%)
+            var recoveryStrength = 0.08; // Gentle recovery force
+            
+            // Apply normal downward drift
             this.centerY += this.downwardDrift;
             
-            // Keep formation within bounds with smooth bouncing
+            // Apply recovery movement if formation is too low
+            if (this.centerY > softLowerBoundary) {
+                // Calculate how far beyond the boundary
+                var excessDistance = this.centerY - softLowerBoundary;
+                // Apply proportional recovery force (stronger when further down)
+                var recoveryForce = recoveryStrength * (1 + excessDistance / 100);
+                // Move upward toward preferred zone
+                this.centerY -= recoveryForce * excessDistance;
+            }
+            // Gentle upward drift if in preferred zone to prevent settling at boundary
+            else if (this.centerY > preferredUpperZone) {
+                this.centerY -= this.downwardDrift * 0.3; // Counteract some of the downward drift
+            }
+            
+            // Hard boundaries to prevent formations from going completely off-screen
+            var minY = 50; // Minimum Y position
+            var maxY = canvas.height * 0.75; // Absolute maximum (75% of screen)
+            
+            if (this.centerY < minY) {
+                this.centerY = minY;
+            } else if (this.centerY > maxY) {
+                this.centerY = maxY;
+            }
+            
+            // Keep formation within horizontal bounds with smooth bouncing
             var margin = 100;
             if (this.centerX < margin) {
                 this.centerX = margin;
@@ -1853,9 +1884,21 @@ var game = (function () {
             this.verticalTime += this.verticalSpeed;
             var verticalOffset = Math.sin(this.verticalTime) * this.verticalAmplitude;
             this.posY = this.formationCenterY + verticalOffset;
+            
+            // Apply vertical boundaries for boss minions
+            var minY = 30;
+            var maxY = canvas.height * 0.7; // Keep boss minions in upper 70%
+            if (this.posY < minY) this.posY = minY;
+            if (this.posY > maxY) this.posY = maxY;
         } else {
-            // Regular enemy or boss - normal downward movement
+            // Regular enemy or boss - normal downward movement with boundaries
             this.posY += this.downSpeed * 0.6; // Noticeable downward drift
+            
+            // Apply vertical boundaries for regular enemies/bosses
+            var minY = 20;
+            var maxY = canvas.height * 0.75; // Absolute maximum at 75% of screen
+            if (this.posY < minY) this.posY = minY;
+            if (this.posY > maxY) this.posY = maxY;
         }
         
         this.phaseTick++;
@@ -2269,7 +2312,9 @@ var game = (function () {
                 var secondaryPattern = getSecondaryFormationPattern(formationIndex);
                 secondaryController.initFormation(secondaryPattern, formationEnemies, currentWave);
                 secondaryController.formationGroup = formationIndex;
-                secondaryController.centerY = 50 + (formationIndex * 80); // Stagger vertically
+                // Position secondary formations within the safe upper zone (respecting 60% boundary)
+                var maxSafeY = (canvas.height * 0.6) - 100; // Stay well within the safe zone
+                secondaryController.centerY = Math.min(50 + (formationIndex * 60), maxSafeY); // Stagger vertically within bounds
                 secondaryController.oscillationAmount = 80 - (formationIndex * 20); // Smaller movement for secondary formations
                 
                 // Store secondary controller
