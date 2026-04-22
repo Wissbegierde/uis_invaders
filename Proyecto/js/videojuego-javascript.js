@@ -1684,8 +1684,8 @@ var game = (function () {
             
             if (Math.random() < shootChance) {
                 // Calculate shot speed based on level - balanced
-                var shotSpeed = 3.0 + (level * 0.2); // Balanced shots at higher levels
-                shotSpeed = Math.min(6.0, shotSpeed); // Cap maximum speed - reasonable
+                var shotSpeed = 2.5 + (level * 0.15); // Slower shots at higher levels
+                shotSpeed = Math.min(5.0, shotSpeed); // Lower maximum speed
                 
                 // Add slight aiming variation based on level
                 var aimVariation = (Math.random() - 0.5) * (0.4 - (level * 0.03));
@@ -1725,8 +1725,8 @@ var game = (function () {
             
             // Much shorter shooting intervals
             var timeSinceLastShot = now - enemy.lastShotTime;
-            var baseShotInterval = 600 - (currentWave * 30); // Much faster shooting in later waves
-            var minInterval = Math.max(200, baseShotInterval); // Much shorter minimum interval
+            var baseShotInterval = 800 - (currentWave * 20); // Slower shooting in later waves
+            var minInterval = Math.max(300, baseShotInterval); // Longer minimum interval
             
             return timeSinceLastShot > (minInterval + enemy.staggeredShotDelay);
         },
