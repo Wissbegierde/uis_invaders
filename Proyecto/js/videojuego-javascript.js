@@ -19,6 +19,280 @@ var game = (function () {
     var starsParallax = [];
     var BG_ASSET_W = 1168;
     var BG_ASSET_H = 784;
+    
+    // ==================== CREDITS SYSTEM ====================
+    var creditsActive = false;
+    var creditsScrollY = 0;
+    var creditsScrollSpeed = 0.8;
+    var creditsStars = [];
+    var creditsTextLines = [];
+    
+    // Menu credits (separate from post-victory credits)
+    var menuCreditsActive = false;
+    var menuCreditsScrollY = 0;
+    var menuCreditsScrollSpeed = 0.8;
+    var menuCreditsStars = [];
+    var menuCreditsTextLines = [];
+    
+    function initCredits() {
+        creditsActive = true;
+        creditsScrollY = canvas.height + 50;
+        creditsStars = [];
+        
+        // Initialize starfield for credits
+        for (var i = 0; i < 100; i++) {
+            creditsStars.push({
+                x: Math.random() * canvas.width,
+                y: Math.random() * canvas.height,
+                size: Math.random() * 2 + 0.5,
+                speed: Math.random() * 1.5 + 0.5,
+                alpha: Math.random() * 0.5 + 0.5
+            });
+        }
+        
+        // Set up credits text lines
+        creditsTextLines = [
+            { text: "=== CREDITS ===", size: 28, color: "#00FF00", spacing: 60 },
+            { text: "", size: 20, color: "#00FFFF", spacing: 30 },
+            { text: "Tentacle Defense: Zero Hour", size: 24, color: "#00FFFF", spacing: 50 },
+            { text: "", size: 20, color: "#00FFFF", spacing: 30 },
+            { text: "Developed by:", size: 20, color: "#00FF00", spacing: 40 },
+            { text: "Sergio Andrés Martinez Perez", size: 18, color: "#FFFFFF", spacing: 30 },
+            { text: "Daniel Fernando Leal Ayala", size: 18, color: "#FFFFFF", spacing: 30 },
+            { text: "Juan David Mena Gamboa", size: 18, color: "#FFFFFF", spacing: 30 },
+            { text: "Miguel Ángel Bolaño López", size: 18, color: "#FFFFFF", spacing: 50 },
+            { text: "", size: 20, color: "#00FFFF", spacing: 30 },
+            { text: "Universidad Industrial de Santander (UIS)", size: 18, color: "#00FF00", spacing: 30 },
+            { text: "Software Engineering Project", size: 18, color: "#00FF00", spacing: 50 },
+            { text: "", size: 20, color: "#00FFFF", spacing: 30 },
+            { text: "Special Thanks:", size: 20, color: "#00FF00", spacing: 40 },
+            { text: "Leonardo AI", size: 18, color: "#FFFFFF", spacing: 25 },
+            { text: "Pixabay", size: 18, color: "#FFFFFF", spacing: 25 },
+            { text: "Freesound", size: 18, color: "#FFFFFF", spacing: 25 },
+            { text: "Epic 8-bit Music YouTube Channel", size: 18, color: "#FFFFFF", spacing: 25 },
+            { text: "HTML5 Canvas", size: 18, color: "#FFFFFF", spacing: 25 },
+            { text: "JavaScript ES5", size: 18, color: "#FFFFFF", spacing: 50 },
+            { text: "", size: 20, color: "#00FFFF", spacing: 30 },
+            { text: "Powered by:", size: 20, color: "#00FF00", spacing: 40 },
+            { text: "Canvas HTML5 + JavaScript", size: 18, color: "#00FFFF", spacing: 50 },
+            { text: "", size: 20, color: "#00FFFF", spacing: 30 },
+            { text: "PRESS ENTER TO RETURN TO MENU", size: 16, color: "#FFFF00", spacing: 30 }
+        ];
+    }
+    
+    function drawCreditsBackground() {
+        // Draw dark space background
+        bufferctx.fillStyle = "#02060f";
+        bufferctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // Update and draw stars
+        for (var i = 0; i < creditsStars.length; i++) {
+            var s = creditsStars[i];
+            s.y += s.speed;
+            if (s.y > canvas.height + 2) {
+                s.y = -2;
+                s.x = Math.random() * canvas.width;
+            }
+            bufferctx.globalAlpha = s.alpha;
+            bufferctx.fillStyle = "#ffffff";
+            bufferctx.fillRect(s.x, s.y, s.size, s.size);
+        }
+        bufferctx.globalAlpha = 1;
+    }
+    
+    function drawCredits() {
+        if (!creditsActive) return;
+        
+        drawCreditsBackground();
+        
+        var currentY = creditsScrollY;
+        var centerX = canvas.width / 2;
+        
+        bufferctx.textAlign = "center";
+        
+        for (var i = 0; i < creditsTextLines.length; i++) {
+            var line = creditsTextLines[i];
+            if (line.text === "") {
+                currentY += line.spacing;
+                continue;
+            }
+            
+            // Calculate fade based on position
+            var fadeAlpha = 1;
+            if (currentY < 100) {
+                fadeAlpha = Math.max(0, currentY / 100);
+            } else if (currentY > canvas.height - 100) {
+                fadeAlpha = Math.max(0, (canvas.height - currentY) / 100);
+            }
+            
+            bufferctx.globalAlpha = fadeAlpha;
+            bufferctx.fillStyle = line.color;
+            bufferctx.font = line.size + "px 'Press Start 2P', monospace";
+            bufferctx.fillText(line.text, centerX, currentY);
+            
+            currentY += line.spacing;
+        }
+        
+        bufferctx.globalAlpha = 1;
+    }
+    
+    function updateCredits() {
+        if (!creditsActive) return;
+        
+        creditsScrollY -= creditsScrollSpeed;
+        
+        // Check if credits have finished scrolling
+        var totalHeight = 0;
+        for (var i = 0; i < creditsTextLines.length; i++) {
+            totalHeight += creditsTextLines[i].spacing;
+        }
+        
+        if (creditsScrollY < -totalHeight) {
+            // Credits finished, return to menu
+            creditsActive = false;
+            backToStartMenu();
+        }
+    }
+    
+    function skipCredits() {
+        if (!creditsActive) return;
+        creditsActive = false;
+        backToStartMenu();
+    }
+    
+    function initMenuCredits(canvasRef) {
+        if (!canvasRef) {
+            console.error("Canvas not defined in initMenuCredits");
+            return;
+        }
+        menuCreditsActive = true;
+        menuCreditsScrollY = canvasRef.height + 50;
+        menuCreditsStars = [];
+        
+        // Initialize starfield for menu credits
+        for (var i = 0; i < 100; i++) {
+            menuCreditsStars.push({
+                x: Math.random() * canvasRef.width,
+                y: Math.random() * canvasRef.height,
+                size: Math.random() * 2 + 0.5,
+                speed: Math.random() * 1.5 + 0.5,
+                alpha: Math.random() * 0.5 + 0.5
+            });
+        }
+        
+        // Set up menu credits text lines
+        menuCreditsTextLines = [
+            { text: "Tentacle Defense: Zero Hour", size: 24, color: "#00FFFF", spacing: 50 },
+            { text: "", size: 20, color: "#00FFFF", spacing: 30 },
+            { text: "Developed by:", size: 20, color: "#00FF00", spacing: 40 },
+            { text: "Sergio Andrés Martinez Perez", size: 18, color: "#FFFFFF", spacing: 30 },
+            { text: "Daniel Fernando Leal Ayala", size: 18, color: "#FFFFFF", spacing: 30 },
+            { text: "Juan David Mena Gamboa", size: 18, color: "#FFFFFF", spacing: 30 },
+            { text: "Miguel Ángel Bolaño López", size: 18, color: "#FFFFFF", spacing: 50 },
+            { text: "", size: 20, color: "#00FFFF", spacing: 30 },
+            { text: "Universidad Industrial de Santander (UIS)", size: 18, color: "#00FF00", spacing: 30 },
+            { text: "Software Engineering Project", size: 18, color: "#00FF00", spacing: 50 },
+            { text: "", size: 20, color: "#00FFFF", spacing: 30 },
+            { text: "Special Thanks:", size: 20, color: "#00FF00", spacing: 40 },
+            { text: "Leonardo AI", size: 18, color: "#FFFFFF", spacing: 25 },
+            { text: "Pixabay", size: 18, color: "#FFFFFF", spacing: 25 },
+            { text: "Freesound", size: 18, color: "#FFFFFF", spacing: 25 },
+            { text: "Epic 8-bit Music YouTube Channel", size: 18, color: "#FFFFFF", spacing: 25 },
+            { text: "HTML5 Canvas", size: 18, color: "#FFFFFF", spacing: 25 },
+            { text: "JavaScript ES5", size: 18, color: "#FFFFFF", spacing: 50 },
+            { text: "", size: 20, color: "#00FFFF", spacing: 30 },
+            { text: "Powered by:", size: 20, color: "#00FF00", spacing: 40 },
+            { text: "Canvas HTML5 + JavaScript", size: 18, color: "#00FFFF", spacing: 50 },
+            { text: "", size: 20, color: "#00FFFF", spacing: 30 },
+            { text: "PRESS ENTER OR ESC TO RETURN", size: 16, color: "#FFFF00", spacing: 30 }
+        ];
+    }
+    
+    function drawMenuCreditsBackground() {
+        // Draw dark space background
+        ctx.fillStyle = "#02060f";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // Update and draw stars
+        for (var i = 0; i < menuCreditsStars.length; i++) {
+            var s = menuCreditsStars[i];
+            s.y += s.speed;
+            if (s.y > canvas.height + 2) {
+                s.y = -2;
+                s.x = Math.random() * canvas.width;
+            }
+            ctx.globalAlpha = s.alpha;
+            ctx.fillStyle = "#ffffff";
+            ctx.fillRect(s.x, s.y, s.size, s.size);
+        }
+        ctx.globalAlpha = 1;
+    }
+    
+    function drawMenuCredits() {
+        if (!menuCreditsActive) return;
+        
+        drawMenuCreditsBackground();
+        
+        var currentY = menuCreditsScrollY;
+        var centerX = canvas.width / 2;
+        
+        ctx.textAlign = "center";
+        
+        for (var i = 0; i < menuCreditsTextLines.length; i++) {
+            var line = menuCreditsTextLines[i];
+            if (line.text === "") {
+                currentY += line.spacing;
+                continue;
+            }
+            
+            // Calculate fade based on position
+            var fadeAlpha = 1;
+            if (currentY < 100) {
+                fadeAlpha = Math.max(0, currentY / 100);
+            } else if (currentY > canvas.height - 100) {
+                fadeAlpha = Math.max(0, (canvas.height - currentY) / 100);
+            }
+            
+            ctx.globalAlpha = fadeAlpha;
+            ctx.fillStyle = line.color;
+            ctx.font = line.size + "px 'Press Start 2P', monospace";
+            ctx.fillText(line.text, centerX, currentY);
+            
+            currentY += line.spacing;
+        }
+        
+        ctx.globalAlpha = 1;
+    }
+    
+    function updateMenuCredits() {
+        if (!menuCreditsActive) return;
+        
+        menuCreditsScrollY -= menuCreditsScrollSpeed;
+        
+        // Check if credits have finished scrolling
+        var totalHeight = 0;
+        for (var i = 0; i < menuCreditsTextLines.length; i++) {
+            totalHeight += menuCreditsTextLines[i].spacing;
+        }
+        
+        if (menuCreditsScrollY < -totalHeight) {
+            // Credits finished, return to menu
+            menuCreditsActive = false;
+            if (startScreen) {
+                startScreen.active = true;
+                startScreen.mode = "menu";
+            }
+        }
+    }
+    
+    function skipMenuCredits() {
+        if (!menuCreditsActive) return;
+        menuCreditsActive = false;
+        if (startScreen) {
+            startScreen.active = true;
+            startScreen.mode = "menu";
+        }
+    }
     var lastScoreValue = 0;
     var scoreJitterUntil = 0;
     var levelStatusUntil = 0;
@@ -823,19 +1097,64 @@ var game = (function () {
         var w = this.canvas.width;
         var h = this.canvas.height;
         c.save();
-        c.fillStyle = "rgba(0,0,0,0.62)";
+        c.fillStyle = "rgba(0,0,0,0.85)";
         c.fillRect(0, 0, w, h);
         c.strokeStyle = "#00FF00";
         c.lineWidth = 2;
         c.fillStyle = "rgba(4,18,8,0.95)";
-        c.fillRect(w / 2 - 250, h / 2 - 72, 500, 144);
-        c.strokeRect(w / 2 - 250, h / 2 - 72, 500, 144);
+        c.fillRect(w / 2 - 320, h / 2 - 160, 640, 320);
+        c.strokeRect(w / 2 - 320, h / 2 - 160, 640, 320);
         c.textAlign = "center";
+        
+        var y = h / 2 - 130;
+        
         c.fillStyle = "#00FF00";
-        c.font = "18px " + this.font;
-        c.fillText("CREDITS", w / 2, h / 2 - 16);
+        c.font = "20px " + this.font;
+        c.fillText("Tentacle Defense: Zero Hour", w / 2, y);
+        y += 30;
+        
+        c.font = "12px " + this.font;
+        c.fillStyle = "#FFFF00";
+        c.fillText("Videojuego Desarrollado por Gorgon Arcade Labs", w / 2, y);
+        y += 30;
+        
+        
+        
+        c.fillStyle = "#FFFFFF";
+        c.font = "12px " + this.font;
+        c.fillText("Sergio Andrés Martinez Perez", w / 2, y);
+        y += 18;
+        c.fillText("Daniel Fernando Leal Ayala", w / 2, y);
+        y += 18;
+        c.fillText("Juan David Mena Gamboa", w / 2, y);
+        y += 18;
+        c.fillText("Miguel Ángel Bolaño López", w / 2, y);
+        y += 25;
+        
+        c.fillStyle = "#00FF00";
         c.font = "14px " + this.font;
-        c.fillText("Developed by Gorgon Arcade Labs", w / 2, h / 2 + 22);
+        c.fillText("Universidad Industrial de Santander (UIS)", w / 2, y);
+        y += 18;
+        c.fillText("Software Engineering Project", w / 2, y);
+        y += 25;
+        
+        c.fillStyle = "#00FFFF";
+        c.fillText("Special Thanks:", w / 2, y);
+        y += 22;
+        
+        c.fillStyle = "#FFFFFF";
+        c.font = "12px " + this.font;
+        c.fillText("Leonardo AI, Pixabay, Freesound", w / 2, y);
+        y += 18;
+        c.fillText("Epic 8-bit Music YouTube Channel", w / 2, y);
+        y += 18;
+        c.fillText("HTML5 Canvas, JavaScript ES5", w / 2, y);
+        y += 25;
+        
+        c.fillStyle = "#00FF00";
+        c.font = "14px " + this.font;
+        c.fillText("Powered by: Canvas HTML5 + JavaScript", w / 2, y);
+        
         c.restore();
     };
 
@@ -898,6 +1217,7 @@ var game = (function () {
             }
             return;
         }
+        // Use existing credits system
         this.showCreditsUntil = Date.now() + 2200;
         gameState = GAME_STATE.CREDITS;
     };
@@ -2223,6 +2543,9 @@ var game = (function () {
     function backToStartMenu() {
         paused = false;
         sessionActive = false;
+        creditsActive = false;
+        gameOver = false;
+        overlayShown = false;
         keyPressed = {};
         hideEndOverlay();
         if (startScreen) { startScreen.activate(); }
@@ -3209,6 +3532,15 @@ var game = (function () {
             draw();
             return;
         }
+        
+        // Handle credits state
+        if (creditsActive) {
+            updateCredits();
+            drawCredits();
+            draw();
+            return;
+        }
+        
         drawBackground();
         if (paused) {
             drawHud();
@@ -3451,6 +3783,13 @@ var game = (function () {
         // Play appropriate end game music
         if (win) {
             AudioManager.playVictoryMusic();
+            // After showing victory overlay, transition to credits
+            setTimeout(function() {
+                if (win && !creditsActive) {
+                    hideEndOverlay();
+                    initCredits();
+                }
+            }, 3000);
         } else {
             AudioManager.playGameOverMusic();
         }
@@ -3460,6 +3799,12 @@ var game = (function () {
         var key = window.event ? e.keyCode : e.which;
         if (startScreen && startScreen.handleKeyDown(key)) {
             e.preventDefault();
+            return;
+        }
+        // Skip credits with ESC or ENTER
+        if (creditsActive && (key === 27 || key === 13)) {
+            e.preventDefault();
+            skipCredits();
             return;
         }
         if (sessionActive && !gameOver && (key === 80 || key === 27)) {
