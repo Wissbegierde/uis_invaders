@@ -11,6 +11,7 @@ var game = (function () {
     var GAME_STATE = { SPLASH: 0, MENU: 1, PLAYING: 2, CREDITS: 3 };
     var STORAGE_SCORES = "invaders_high_scores_v2";
     var STORAGE_NAME = "invaders_player_name";
+    var STORAGE_ACHIEVEMENTS = "invaders_achievements_v1";
     var MAX_LIVES = 5;
 
     var canvas, ctx, buffer, bufferctx;
@@ -19,6 +20,328 @@ var game = (function () {
     var starsParallax = [];
     var BG_ASSET_W = 1168;
     var BG_ASSET_H = 784;
+    
+    // ==================== ACHIEVEMENTS SYSTEM ====================
+    var achievementManager = null;
+    var activeAchievementPopups = [];
+    
+    // Achievement definitions with retro arcade theme
+    var ACHIEVEMENTS = {
+        first_blood: {
+            id: "first_blood",
+            title: "FIRST BLOOD",
+            description: "Destroy your first enemy",
+            icon: "🎯",
+            requirement: 1,
+            type: "enemies_killed"
+        },
+        combo_master: {
+            id: "combo_master",
+            title: "COMBO MASTER",
+            description: "Reach 5x combo",
+            icon: "⚡",
+            requirement: 5,
+            type: "max_combo"
+        },
+        untouchable: {
+            id: "untouchable",
+            title: "UNTOUCHABLE",
+            description: "Complete a wave without taking damage",
+            icon: "🛡️",
+            requirement: 1,
+            type: "wave_no_damage"
+        },
+        boss_slayer: {
+            id: "boss_slayer",
+            title: "BOSS SLAYER",
+            description: "Defeat a boss enemy",
+            icon: "👹",
+            requirement: 1,
+            type: "bosses_killed"
+        },
+        survivor: {
+            id: "survivor",
+            title: "SURVIVOR",
+            description: "Survive for 5 minutes",
+            icon: "⏰",
+            requirement: 300, // 5 minutes in seconds
+            type: "survival_time"
+        },
+        sharpshooter: {
+            id: "sharpshooter",
+            title: "SHARPSHOOTER",
+            description: "Achieve 80% accuracy",
+            icon: "🎪",
+            requirement: 0.8,
+            type: "accuracy"
+        },
+        wave_conqueror: {
+            id: "wave_conqueror",
+            title: "WAVE CONQUEROR",
+            description: "Complete all 5 waves",
+            icon: "🌊",
+            requirement: 5,
+            type: "waves_completed"
+        },
+        destroyer: {
+            id: "destroyer",
+            title: "DESTROYER",
+            description: "Destroy 50 enemies in one run",
+            icon: "💥",
+            requirement: 50,
+            type: "enemies_killed"
+        }
+    };
+    
+    // Achievement Manager Class
+    function AchievementManager() {
+        this.unlockedAchievements = this.loadAchievements();
+        this.trackingStats = {
+            enemies_killed: 0,
+            max_combo: 0,
+            wave_no_damage: 0,
+            bosses_killed: 0,
+            survival_time: 0,
+            shots_fired: 0,
+            shots_hit: 0,
+            waves_completed: 0,
+            current_combo: 0,
+            wave_start_time: 0,
+            run_start_time: 0,
+            last_damage_time: 0
+        };
+        this.sessionStartTime = Date.now();
+    }
+    
+    AchievementManager.prototype = {
+        // Initialize tracking for new game session
+        initSession: function() {
+            this.trackingStats.current_combo = 0;
+            this.trackingStats.wave_start_time = Date.now();
+            this.trackingStats.run_start_time = Date.now();
+            this.trackingStats.last_damage_time = 0;
+        },
+        
+        // Load achievements from localStorage
+        loadAchievements: function() {
+            var saved = localStorage.getItem(STORAGE_ACHIEVEMENTS);
+            return saved ? JSON.parse(saved) : [];
+        },
+        
+        // Save achievements to localStorage
+        saveAchievements: function() {
+            localStorage.setItem(STORAGE_ACHIEVEMENTS, JSON.stringify(this.unlockedAchievements));
+        },
+        
+        // Check if achievement is unlocked
+        isUnlocked: function(achievementId) {
+            return this.unlockedAchievements.indexOf(achievementId) !== -1;
+        },
+        
+        // Unlock achievement with popup notification
+        unlockAchievement: function(achievementId) {
+            if (this.isUnlocked(achievementId)) return false;
+            
+            this.unlockedAchievements.push(achievementId);
+            this.saveAchievements();
+            
+            var achievement = ACHIEVEMENTS[achievementId];
+            if (achievement) {
+                this.showAchievementPopup(achievement);
+                return true;
+            }
+            return false;
+        },
+        
+        // Show animated popup notification
+        showAchievementPopup: function(achievement) {
+            var popup = {
+                achievement: achievement,
+                startTime: Date.now(),
+                duration: 3000, // 3 seconds
+                y: -100, // Start off-screen
+                targetY: 150,
+                alpha: 0,
+                targetAlpha: 1,
+                state: "slide_in" // slide_in, display, slide_out
+            };
+            
+            activeAchievementPopups.push(popup);
+            
+            // Play achievement sound (reuse existing sound system)
+            if (typeof AudioManager !== 'undefined') {
+                AudioManager.playSfx("powerup_pick");
+            }
+        },
+        
+        // Update achievement popups
+        updatePopups: function() {
+            var now = Date.now();
+            
+            for (var i = activeAchievementPopups.length - 1; i >= 0; i--) {
+                var popup = activeAchievementPopups[i];
+                var elapsed = now - popup.startTime;
+                
+                if (popup.state === "slide_in") {
+                    popup.y += (popup.targetY - popup.y) * 0.15;
+                    popup.alpha += (popup.targetAlpha - popup.alpha) * 0.15;
+                    
+                    if (Math.abs(popup.y - popup.targetY) < 1) {
+                        popup.state = "display";
+                        popup.displayStartTime = now;
+                    }
+                } else if (popup.state === "display") {
+                    if (now - popup.displayStartTime > 2000) {
+                        popup.state = "slide_out";
+                        popup.targetY = -100;
+                        popup.targetAlpha = 0;
+                    }
+                } else if (popup.state === "slide_out") {
+                    popup.y += (popup.targetY - popup.y) * 0.15;
+                    popup.alpha += (popup.targetAlpha - popup.alpha) * 0.15;
+                    
+                    if (popup.y < -90) {
+                        activeAchievementPopups.splice(i, 1);
+                    }
+                }
+            }
+        },
+        
+        // Draw achievement popups
+        drawPopups: function(ctx) {
+            for (var i = 0; i < activeAchievementPopups.length; i++) {
+                var popup = activeAchievementPopups[i];
+                var achievement = popup.achievement;
+                
+                ctx.save();
+                ctx.globalAlpha = popup.alpha;
+                
+                // Background panel with neon effect
+                ctx.fillStyle = "rgba(0, 0, 0, 0.9)";
+                ctx.strokeStyle = "#00FF88";
+                ctx.lineWidth = 2;
+                ctx.shadowColor = "#00FF88";
+                ctx.shadowBlur = 10;
+                
+                var panelWidth = 300;
+                var panelHeight = 80;
+                var panelX = (canvas.width - panelWidth) / 2;
+                var panelY = popup.y;
+                
+                ctx.fillRect(panelX, panelY, panelWidth, panelHeight);
+                ctx.strokeRect(panelX, panelY, panelWidth, panelHeight);
+                
+                // Achievement content
+                ctx.shadowBlur = 0;
+                ctx.fillStyle = "#00FF88";
+                ctx.font = "bold 16px 'Press Start 2P', monospace";
+                ctx.textAlign = "left";
+                ctx.fillText(achievement.icon + " " + achievement.title, panelX + 15, panelY + 30);
+                
+                ctx.fillStyle = "#00FFFF";
+                ctx.font = "10px 'Press Start 2P', monospace";
+                ctx.fillText(achievement.description, panelX + 15, panelY + 50);
+                
+                // "UNLOCKED" text
+                ctx.fillStyle = "#FFFF00";
+                ctx.font = "bold 8px 'Press Start 2P', monospace";
+                ctx.textAlign = "right";
+                ctx.fillText("UNLOCKED!", panelX + panelWidth - 15, panelY + 65);
+                
+                ctx.restore();
+            }
+        },
+        
+        // Track various game events
+        trackEnemyKill: function() {
+            this.trackingStats.enemies_killed++;
+            this.trackingStats.current_combo++;
+            
+            if (this.trackingStats.current_combo > this.trackingStats.max_combo) {
+                this.trackingStats.max_combo = this.trackingStats.max_combo;
+            }
+            
+            this.checkAchievements();
+        },
+        
+        trackShotFired: function() {
+            this.trackingStats.shots_fired++;
+        },
+        
+        trackShotHit: function() {
+            this.trackingStats.shots_hit++;
+        },
+        
+        trackDamageTaken: function() {
+            this.trackingStats.last_damage_time = Date.now();
+        },
+        
+        trackWaveCompleted: function() {
+            this.trackingStats.waves_completed++;
+            
+            // Check if wave was completed without damage
+            var waveTime = Date.now() - this.trackingStats.wave_start_time;
+            if (this.trackingStats.last_damage_time < this.trackingStats.wave_start_time) {
+                this.trackingStats.wave_no_damage++;
+            }
+            
+            this.trackingStats.wave_start_time = Date.now();
+            this.checkAchievements();
+        },
+        
+        trackBossKilled: function() {
+            this.trackingStats.bosses_killed++;
+            this.checkAchievements();
+        },
+        
+        // Check and unlock achievements based on current stats
+        checkAchievements: function() {
+            for (var id in ACHIEVEMENTS) {
+                var achievement = ACHIEVEMENTS[id];
+                if (this.isUnlocked(id)) continue;
+                
+                var currentValue = this.trackingStats[achievement.type];
+                var shouldUnlock = false;
+                
+                switch (achievement.type) {
+                    case "accuracy":
+                        if (this.trackingStats.shots_fired > 0) {
+                            var accuracy = this.trackingStats.shots_hit / this.trackingStats.shots_fired;
+                            shouldUnlock = accuracy >= achievement.requirement;
+                        }
+                        break;
+                    case "survival_time":
+                        var survivalSeconds = Math.floor((Date.now() - this.sessionStartTime) / 1000);
+                        shouldUnlock = survivalSeconds >= achievement.requirement;
+                        break;
+                    default:
+                        shouldUnlock = currentValue >= achievement.requirement;
+                        break;
+                }
+                
+                if (shouldUnlock) {
+                    this.unlockAchievement(id);
+                }
+            }
+        },
+        
+        // Get all achievements with unlock status
+        getAllAchievements: function() {
+            var result = [];
+            for (var id in ACHIEVEMENTS) {
+                result.push({
+                    achievement: ACHIEVEMENTS[id],
+                    unlocked: this.isUnlocked(id)
+                });
+            }
+            return result;
+        },
+        
+        // Reset combo when player takes damage
+        resetCombo: function() {
+            this.trackingStats.current_combo = 0;
+        }
+    };
     
     // ==================== CREDITS SYSTEM ====================
     var creditsActive = false;
@@ -2441,6 +2764,12 @@ var game = (function () {
                 if (currentBoss.dead || bossHP <= 0) {
                     bossActive = false;
                     currentBoss = null;
+                    
+                    // Track boss defeat for achievements
+                    if (achievementManager) {
+                        achievementManager.trackBossKilled();
+                    }
+                    
                     waveState = "completed";
                     finishGame(true, player.score);
                     return;
@@ -2467,6 +2796,11 @@ var game = (function () {
                 
                 // Advance normally
                 if (killsInLevel >= killsTargetInLevel && enemies.length === 0) {
+                    // Track wave completion for achievements
+                    if (achievementManager) {
+                        achievementManager.trackWaveCompleted();
+                    }
+                    
                     if (currentWave >= totalWaves) {
                         waveState = "completed";
                         finishGame(true, player.score);
@@ -2504,6 +2838,11 @@ var game = (function () {
         fireLock = false;
         nextPlayerShot = 0;
         currentWave = 0;
+        
+        // Initialize achievement tracking for new session
+        if (achievementManager) {
+            achievementManager.initSession();
+        }
         
         // Reset formation controllers to prevent freezing
         activeFormationController = null;
@@ -2618,8 +2957,10 @@ var game = (function () {
         var inputOverlay = document.getElementById("nombre-overlay");
         var linkSpec = document.getElementById("btn-especificaciones");
         var linkTut = document.getElementById("link-tutorial");
+        var linkLogros = document.getElementById("btn-logros");
         var closeSpec = document.getElementById("modal-esp-cerrar");
         var closeTut = document.getElementById("modal-tutorial-cerrar");
+        var closeLogros = document.getElementById("modal-logros-cerrar");
 
         if (btnPlay) {
             btnPlay.addEventListener("click", function () {
@@ -2652,10 +2993,45 @@ var game = (function () {
         if (btnChangeName && inputName) { btnChangeName.addEventListener("click", function () { inputName.focus(); inputName.select(); }); }
         if (linkSpec) { linkSpec.addEventListener("click", function () { showModal("modal-especificaciones"); }); }
         if (linkTut) { linkTut.addEventListener("click", function (e) { e.preventDefault(); showModal("modal-tutorial"); }); }
+        if (linkLogros) { linkLogros.addEventListener("click", function () { showAchievementsModal(); }); }
         if (closeSpec) { closeSpec.addEventListener("click", function () { hideModal("modal-especificaciones"); }); }
         if (closeTut) { closeTut.addEventListener("click", function () { hideModal("modal-tutorial"); }); }
+        if (closeLogros) { closeLogros.addEventListener("click", function () { hideModal("modal-logros"); }); }
 
         syncNameUI();
+    }
+
+    function showAchievementsModal() {
+        if (!achievementManager) return;
+        
+        var achievementsContainer = document.getElementById("logros-contenido");
+        var allAchievements = achievementManager.getAllAchievements();
+        
+        var html = "<div class='achievements-grid'>";
+        
+        for (var i = 0; i < allAchievements.length; i++) {
+            var ach = allAchievements[i];
+            var unlockedClass = ach.unlocked ? "achievement-unlocked" : "achievement-locked";
+            var statusText = ach.unlocked ? "DESBLOQUEADO" : "BLOQUEADO";
+            var statusColor = ach.unlocked ? "#00FF88" : "#666666";
+            
+            html += "<div class='achievement-item " + unlockedClass + "'>";
+            html += "<div class='achievement-icon'>" + ach.achievement.icon + "</div>";
+            html += "<div class='achievement-info'>";
+            html += "<div class='achievement-title'>" + ach.achievement.title + "</div>";
+            html += "<div class='achievement-description'>" + ach.achievement.description + "</div>";
+            html += "<div class='achievement-status' style='color: " + statusColor + "'>" + statusText + "</div>";
+            html += "</div>";
+            html += "</div>";
+        }
+        
+        html += "</div>";
+        html += "<div class='achievements-stats'>";
+        html += "<div class='stat-item'><span class='stat-label'>Progreso:</span> <span class='stat-value'>" + allAchievements.filter(function(a) { return a.unlocked; }).length + "/" + allAchievements.length + "</span></div>";
+        html += "</div>";
+        
+        achievementsContainer.innerHTML = html;
+        showModal("modal-logros");
     }
 
     function showModal(id) {
@@ -3194,6 +3570,11 @@ var game = (function () {
         var pw = spriteW(player.image, player.w);
         playerShots.push({ x: player.posX + pw / 2 - 28, y: player.posY - 20, speed: 7.5, vx: vx || 0, img: playerShotImage });
         
+        // Track shot fired for achievements
+        if (achievementManager) {
+            achievementManager.trackShotFired();
+        }
+        
         // Play player shoot sound
         AudioManager.playPlayerShoot();
     }
@@ -3415,6 +3796,11 @@ var game = (function () {
                     e.hitFlashUntil = Date.now() + 200;
                     // Play hit sound for audio feedback
                     AudioManager.playHitEnemy();
+                    
+                    // Track shot hit for achievements
+                    if (achievementManager) {
+                        achievementManager.trackShotHit();
+                    }
                     if (e.isBoss && bossActive && e === currentBoss) {
                         // Boss damage system - reduce HP instead of life
                         if (!e.shielded) {
@@ -3445,6 +3831,11 @@ var game = (function () {
                         enemiesKilled++;
                         killsInLevel++;
                         deathEffects.push({ x: e.posX, y: e.posY, w: e.w, h: e.h, ttl: 18, img: e.killedImage });
+                        
+                        // Track enemy kill for achievements
+                        if (achievementManager) {
+                            achievementManager.trackEnemyKill();
+                        }
                         maybeDropHeart(e.posX + e.w / 2 - 10, e.posY + e.h / 2 - 10);
                         maybeDropPowerUp(e.posX + e.w / 2 - 10, e.posY + e.h / 2 - 10);
                         
@@ -3533,6 +3924,12 @@ var game = (function () {
         combo.count = 0;
         combo.multiplier = combo.baseMultiplier;
         combo.timer = 0;
+        
+        // Track damage taken for achievements
+        if (achievementManager) {
+            achievementManager.trackDamageTaken();
+            achievementManager.resetCombo();
+        }
         
         player.dead = true;
         player.image = playerKilledImage;
@@ -3688,6 +4085,12 @@ var game = (function () {
         advanceLevelIfNeeded();
         drawWaveAnnouncement();
         drawHud();
+        
+        // Update achievement popups
+        if (achievementManager) {
+            achievementManager.updatePopups();
+        }
+        
         draw();
     }
 
@@ -3728,6 +4131,11 @@ var game = (function () {
         // Apply screen shake to final render
         var shakeOffset = applyScreenShake(0, 0);
         ctx.drawImage(buffer, shakeOffset.x, shakeOffset.y);
+        
+        // Draw achievement popups on top
+        if (achievementManager) {
+            achievementManager.drawPopups(ctx);
+        }
     }
 
     function readScoreRecords() {
@@ -3899,6 +4307,9 @@ var game = (function () {
         
         // Initialize Audio Manager
         AudioManager.init();
+        
+        // Initialize Achievement Manager
+        achievementManager = new AchievementManager();
         
         startScreen = new StartScreen(canvas, bufferctx, startGame);
         bindUI();
