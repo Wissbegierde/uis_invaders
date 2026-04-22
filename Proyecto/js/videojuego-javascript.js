@@ -2160,6 +2160,7 @@ var game = (function () {
 
     function restartCurrentLevel() {
         var keepScore = player ? player.score : 0;
+        var keepLevel = level || 1;
         player = new Player();
         player.score = keepScore;
         player.life = 3;
@@ -2169,7 +2170,53 @@ var game = (function () {
         fireLock = false;
         nextPlayerShot = 0;
         keyPressed = {};
-        configLevel();
+        
+        // Clear all game arrays to prevent duplicates and memory leaks
+        enemies.length = 0;
+        enemyShots.length = 0;
+        playerShots.length = 0;
+        heartDrops.length = 0;
+        powerUpDrops.length = 0;
+        deathEffects.length = 0;
+        floatingTexts.length = 0;
+        
+        // Reset boss state completely
+        bossActive = false;
+        currentBoss = null;
+        bossHP = 0;
+        bossMaxHP = 0;
+        lastMinionWaveTime = 0;
+        
+        // Reset formation controllers to prevent freezing
+        activeFormationController = null;
+        secondaryFormationControllers = [];
+        
+        // Reset combo counter
+        combo.count = 0;
+        combo.timer = 0;
+        combo.multiplier = 1;
+        
+        // Reset active power-ups
+        activePowerUps = { triple: 0, shield: 0, speed: 0 };
+        
+        // Reset other game state variables
+        killsInLevel = 0;
+        enemiesKilled = 0;
+        level = keepLevel;
+        bgScrollY = 0;
+        
+        // Reset screen shake
+        screenShake.active = false;
+        screenShake.magnitude = 0;
+        screenShake.duration = 0;
+        screenShake.startTime = 0;
+        
+        // Ensure game state is properly set
+        sessionActive = true;
+        gameState = GAME_STATE.PLAYING;
+        
+        // Use beginWave to properly reset wave state and spawn enemies
+        beginWave(level);
         hideEndOverlay();
     }
 
