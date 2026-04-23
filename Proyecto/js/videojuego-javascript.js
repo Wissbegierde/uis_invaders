@@ -887,6 +887,13 @@ var game = (function () {
     var bossActive = false;
     var currentBoss = null;
     
+    // Support boss system variables
+    var supportBossSpawned = false;
+    var supportBoss = null;
+    var supportBossHP = 0;
+    var supportBossMaxHP = 0;
+    var boss75PercentTriggered = false;
+    
     // Screen shake system variables
     var screenShake = {
         intensity: 0,
@@ -2748,6 +2755,46 @@ var game = (function () {
         return patterns[formationIndex % patterns.length];
     }
 
+    // Spawn support boss when main boss reaches 75% HP
+    function spawnSupportBoss() {
+        if (supportBossSpawned || !currentBoss) return;
+        
+        supportBossSpawned = true;
+        
+        // Create support boss with same sprite/behavior
+        var support = new Enemy(true);
+        support.isSupportBoss = true; // Flag to prevent recursive spawning
+        support.posX = 100; // Position on left side
+        support.posY = 120; // Slightly lower than main boss
+        support.downSpeed = 0;
+        support.hSpeed = 1.0 + (currentWave * 0.04); // Slower than main boss (1.5)
+        support.customShootInterval = 70; // Slower shooting (50 for main boss)
+        support.shotCooldown = 70;
+        support.isInFormation = false;
+        support.canAttack = true; // Can attack immediately (no intro needed)
+        
+        // Set support boss HP to 25% of main boss max HP
+        supportBossMaxHP = Math.floor(bossMaxHP * 0.25);
+        supportBossHP = supportBossMaxHP;
+        
+        // Boss ability variables for support boss
+        support.bossDirection = 1;
+        support.bossDodgeCooldown = 0;
+        support.bossAbilityCooldown = 120; // Longer cooldown for support boss
+        support.currentAbility = null;
+        support.abilityStartTime = 0;
+        support.abilityDuration = 0;
+        support.originalSpeed = support.hSpeed;
+        
+        // Add support boss to enemies array
+        supportBoss = support;
+        enemies.push(support);
+        
+        // Visual feedback - screen shake and warning
+        startScreenShake(8, 500);
+        console.log("Support boss spawned! HP:", supportBossHP, "/", supportBossMaxHP);
+    }
+
     function updateWaveSystem() {
         var now = Date.now();
         if (waveState === "announce") {
@@ -2760,7 +2807,15 @@ var game = (function () {
         if (waveState === "fight") {
             // Boss fight logic
             if (isBossLevel() && bossActive && currentBoss) {
-                // Check if boss is dead
+                // Check if support boss is dead and remove it
+                if (supportBoss && (supportBoss.dead || supportBossHP <= 0)) {
+                    supportBoss.dead = true;
+                    supportBoss = null;
+                    supportBossHP = 0;
+                    // Support boss death is handled in enemy death logic (score/effects)
+                }
+                
+                // Check if main boss is dead - level ends only when main boss dies
                 if (currentBoss.dead || bossHP <= 0) {
                     bossActive = false;
                     currentBoss = null;
@@ -2775,12 +2830,17 @@ var game = (function () {
                     return;
                 }
                 
-                // Spawn minion waves continuously when all enemies are dead
-                if (enemies.length === 1 && enemies[0] === currentBoss) {
-                    // Only boss remains, spawn next wave continuously
+                // Spawn minion waves continuously when only bosses remain
+                var bossCount = 1; // Always count main boss
+                if (supportBoss && !supportBoss.dead) bossCount++;
+                
+                if (enemies.length === bossCount) {
+                    // Only boss(es) remain, spawn next wave continuously
                     if (bossActive && currentBoss) {
                         // Add delay between waves to prevent overwhelming
-                        if (!lastMinionWaveTime || Date.now() - lastMinionWaveTime > 3000) {
+                        // Longer delay when support boss is alive to reduce projectile spam
+                        var minionDelay = (supportBoss && !supportBoss.dead) ? 4000 : 3000;
+                        if (!lastMinionWaveTime || Date.now() - lastMinionWaveTime > minionDelay) {
                             spawnBossMinionWave();
                             lastMinionWaveTime = Date.now();
                         }
@@ -2848,6 +2908,13 @@ var game = (function () {
         activeFormationController = null;
         secondaryFormationControllers = [];
         
+        // Reset support boss state
+        supportBossSpawned = false;
+        supportBoss = null;
+        supportBossHP = 0;
+        supportBossMaxHP = 0;
+        boss75PercentTriggered = false;
+        
         initWaves();
         beginWave(1);
         sessionActive = true;
@@ -2890,6 +2957,13 @@ var game = (function () {
         bossHP = 0;
         bossMaxHP = 0;
         lastMinionWaveTime = 0;
+        
+        // Reset support boss state
+        supportBossSpawned = false;
+        supportBoss = null;
+        supportBossHP = 0;
+        supportBossMaxHP = 0;
+        boss75PercentTriggered = false;
         
         // Reset formation controllers to prevent freezing
         activeFormationController = null;
@@ -3807,6 +3881,12 @@ var game = (function () {
                             bossHP -= 1;
                             console.log("Boss hit! HP:", bossHP, "/", bossMaxHP);
                             
+                            // Check if boss reached 75% HP for the first time - spawn support boss
+                            if (!boss75PercentTriggered && bossHP <= Math.floor(bossMaxHP * 0.75)) {
+                                boss75PercentTriggered = true;
+                                spawnSupportBoss();
+                            }
+                            
                             // Strong screen shake for boss hit
                             startScreenShake(12, 400); // Strong shake for 400ms
                         } else {
@@ -3814,6 +3894,65 @@ var game = (function () {
                             
                             // Light screen shake for shield block
                             startScreenShake(4, 200); // Light shake for 200ms
+                        }
+                    } else if (e.isBoss && bossActive && e === supportBoss) {
+                        // Support boss damage system
+                        if (!e.shielded) {
+                            supportBossHP -= 1;
+                            console.log("Support boss hit! HP:", supportBossHP, "/", supportBossMaxHP);
+                            
+                            // Check if support boss is dead
+                            if (supportBossHP <= 0) {
+                                e.dead = true;
+                                e.life = 0; // Ensure life is also 0 for consistency
+                                
+                                // Play explosion sound for support boss death
+                                AudioManager.playExplosionBig();
+                                
+                                // Update combo and calculate score with multiplier
+                                increaseCombo();
+                                var multiplier = getComboMultiplier();
+                                var scoreGained = e.pointsToKill * multiplier;
+                                player.score += scoreGained;
+                                
+                                enemiesKilled++;
+                                killsInLevel++;
+                                deathEffects.push({ x: e.posX, y: e.posY, w: e.w, h: e.h, ttl: 18, img: e.killedImage });
+                                
+                                // Track enemy kill for achievements
+                                if (achievementManager) {
+                                    achievementManager.trackEnemyKill();
+                                }
+                                
+                                // Drop rewards
+                                maybeDropHeart(e.posX + e.w / 2 - 10, e.posY + e.h / 2 - 10);
+                                maybeDropPowerUp(e.posX + e.w / 2 - 10, e.posY + e.h / 2 - 10);
+                                
+                                // Spawn floating text for score
+                                var scoreText = "+" + scoreGained;
+                                if (multiplier > 1) {
+                                    scoreText += " (x" + multiplier + ")";
+                                    spawnFloatingText(e.posX + e.w / 2, e.posY, scoreText, "#FFD700");
+                                } else {
+                                    spawnFloatingText(e.posX + e.w / 2, e.posY, scoreText, "#FFFFFF");
+                                }
+                                
+                                // Strong screen shake for support boss death
+                                startScreenShake(10, 300);
+                                
+                                // Remove support boss from enemies array
+                                enemies.splice(j, 1);
+                                supportBoss = null;
+                                
+                                hitEnemy = true;
+                                break; // Break the enemy loop since we removed this enemy
+                            } else {
+                                // Light screen shake for support boss hit
+                                startScreenShake(6, 250);
+                            }
+                        } else {
+                            // Light screen shake for shield block
+                            startScreenShake(3, 150);
                         }
                     } else if (e.life <= 0) {
                         // Regular enemy death
