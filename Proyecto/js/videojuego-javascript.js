@@ -850,7 +850,7 @@ var game = (function () {
     var level = 1;
     var enemiesKilled = 0;
     var currentWave = 0;
-    var totalWaves = 1;
+    var totalWaves = 5;
     var waves = [];
     var waveState = "idle"; // idle | announce | fight | transition | completed
     var waveAnnouncementStart = 0;
@@ -2210,16 +2210,23 @@ var game = (function () {
         
         // Legacy movement for non-formation enemies (bosses, etc.)
         if (this.formationCenterY !== undefined) {
-            // Boss minion - oscillate up and down in formation
+            // Boss minion - unpredictable up/down and lateral movement
             this.verticalTime += this.verticalSpeed;
             var verticalOffset = Math.sin(this.verticalTime) * this.verticalAmplitude;
+            // Add random jitter for unpredictability
+            verticalOffset += (Math.random() - 0.5) * 8;
             this.posY = this.formationCenterY + verticalOffset;
+            
+            // Randomly shift formation center for more unpredictability
+            if (Math.random() < 0.02) {
+                this.formationCenterY += (Math.random() - 0.5) * 20;
+            }
             
             // Apply vertical boundaries for boss minions
             var minY = 30;
-            var maxY = canvas.height * 0.7; // Keep boss minions in upper 70%
-            if (this.posY < minY) this.posY = minY;
-            if (this.posY > maxY) this.posY = maxY;
+            var maxY = canvas.height * 0.65; // Keep boss minions in upper 65%
+            if (this.posY < minY) { this.posY = minY; this.formationCenterY = Math.max(minY, this.formationCenterY); }
+            if (this.posY > maxY) { this.posY = maxY; this.formationCenterY = Math.min(maxY, this.formationCenterY); }
         } else {
             // Regular enemy or boss - normal downward movement with boundaries
             this.posY += this.downSpeed * 0.6; // Noticeable downward drift
@@ -2229,6 +2236,12 @@ var game = (function () {
             var maxY = canvas.height * 0.75; // Absolute maximum at 75% of screen
             if (this.posY < minY) this.posY = minY;
             if (this.posY > maxY) this.posY = maxY;
+        }
+        
+        // Unpredictable lateral movement for boss minions
+        if (this.isBossMinion) {
+            this.hSpeed = Math.max(1.0, this.hSpeed + (Math.random() - 0.5) * 0.8);
+            if (Math.random() < 0.04) { this.hDir *= -1; }
         }
         
         this.phaseTick++;
@@ -2260,6 +2273,43 @@ var game = (function () {
         }
 
         this.shotCooldown--;
+        
+        // Boss minion ability management
+        if (this.isBossMinion) {
+            var nowMs = Date.now();
+            // Triple shot ability toggle
+            if (this.canTripleShot) {
+                if (this.tripleShotActive) {
+                    if (nowMs - this.tripleShotStart > this.tripleShotDuration) {
+                        this.tripleShotActive = false;
+                        this.tripleShotCooldown = 3000 + Math.random() * 2000;
+                        this.tripleShotCooldownEnd = nowMs + this.tripleShotCooldown;
+                    }
+                } else {
+                    if (!this.tripleShotCooldownEnd || nowMs > this.tripleShotCooldownEnd) {
+                        this.tripleShotActive = true;
+                        this.tripleShotStart = nowMs;
+                        this.tripleShotDuration = 2500 + Math.random() * 1500;
+                    }
+                }
+            }
+            // Shield ability toggle
+            if (this.canShield) {
+                if (this.shieldActive) {
+                    if (nowMs - this.shieldStart > this.shieldDuration) {
+                        this.shieldActive = false;
+                        this.shieldCooldown = 4000 + Math.random() * 3000;
+                        this.shieldCooldownEnd = nowMs + this.shieldCooldown;
+                    }
+                } else {
+                    if (!this.shieldCooldownEnd || nowMs > this.shieldCooldownEnd) {
+                        this.shieldActive = true;
+                        this.shieldStart = nowMs;
+                        this.shieldDuration = 3000 + Math.random() * 2000;
+                    }
+                }
+            }
+        }
 
         if (this.shotCooldown <= 0) {
             var baseCooldown = typeof this.customShootInterval === "number"
@@ -2269,15 +2319,30 @@ var game = (function () {
             // Boss minions shoot almost always - very high probability
             var shootProbability = this.isBoss ? 0.08 : 0.85; // 85% for minions, 8% for boss
             if (Math.random() < shootProbability) {
-                enemyShots.push({
-                    x: this.posX + this.w / 2 - 4,
-                    y: this.posY + this.h,
-                    speed: this.isBoss ? (5.0 + level * 0.3) : (3.5 + level * 0.2), // Faster for minions
-                    img: enemyShotImage
-                });
+                var shotSpd = this.isBoss ? (5.0 + level * 0.3) : (3.5 + level * 0.2);
+                if (this.isBossMinion) shotSpd = 4.5 + level * 0.3; // Even faster for boss minions
+                
+                if (this.isBossMinion && this.tripleShotActive) {
+                    // Triple shot for boss minions
+                    for (var t = -1; t <= 1; t++) {
+                        enemyShots.push({
+                            x: this.posX + this.w / 2 - 4 + (t * 12),
+                            y: this.posY + this.h,
+                            speed: shotSpd + 0.5,
+                            img: enemyShotImage
+                        });
+                    }
+                } else {
+                    enemyShots.push({
+                        x: this.posX + this.w / 2 - 4,
+                        y: this.posY + this.h,
+                        speed: shotSpd,
+                        img: enemyShotImage
+                    });
+                }
             }
 
-            this.shotCooldown = Math.max(25, baseCooldown);
+            this.shotCooldown = Math.max(10, baseCooldown);
         }
     };
 
@@ -2603,6 +2668,9 @@ var game = (function () {
             
             enemies.push(boss);
             
+            // Switch to boss music
+            AudioManager.playBossMusic();
+            
             // Start dramatic boss intro
             startBossIntro();
             return;
@@ -2721,7 +2789,7 @@ var game = (function () {
             
             // Formation movement - up and down oscillation instead of going down
             e.downSpeed = 0; // No constant downward movement
-            e.hSpeed = 2.0 + (tempWave.enemySpeed * 0.5); // Fast horizontal movement
+            e.hSpeed = 3.5 + (tempWave.enemySpeed * 0.8); // Much faster horizontal movement
             e.hDir = Math.random() < 0.5 ? -1 : 1;
             e.phase = 20 + rand(60); // Phase for oscillation
             e.phaseTick = 0;
@@ -2729,13 +2797,28 @@ var game = (function () {
             // Formation oscillation properties
             e.formationCenterY = 120 + (row * 60); // Center position for this row
             e.verticalAmplitude = 40; // How far up and down to move
-            e.verticalSpeed = 0.05; // Speed of up/down oscillation
+            e.verticalSpeed = 0.12; // Much faster up/down oscillation
             e.verticalTime = Math.random() * Math.PI * 2; // Random starting phase
             
-            // Shooting much faster and more frequent
-            e.shootDelay = Math.max(200, tempWave.shootInterval * 0.5); // Half the delay
+            // Mark as boss minion for enhanced behavior
+            e.isBossMinion = true;
+            
+            // Shooting faster and more frequent
+            e.shootDelay = 80; // Short initial delay
             e.lastShotTime = 0;
-            e.shotCooldown = 300; // Start shooting quickly
+            e.shotCooldown = 25; // Shoot quickly
+            e.customShootInterval = 45; // Rapid fire but slightly slower than before
+            
+            // Random abilities: triple shot (30% chance) and shield (20% chance)
+            e.canTripleShot = Math.random() < 0.30;
+            e.tripleShotActive = false;
+            e.tripleShotCooldown = 0;
+            e.tripleShotDuration = 0;
+            
+            e.canShield = Math.random() < 0.20;
+            e.shieldActive = false;
+            e.shieldCooldown = 0;
+            e.shieldDuration = 0;
             
             enemyList.push(e);
         }
@@ -3940,8 +4023,17 @@ var game = (function () {
                 var e = enemies[j];
                 var enemyHitbox = getEnemyHitbox(e);
                 if (checkAABBCollision({x: s.x, y: s.y, w: s.w || 8, h: s.h || 8}, enemyHitbox)) {
-                    e.life -= 1;
                     hitEnemy = true;
+                    
+                    // Boss minion shield check
+                    if (e.isBossMinion && e.shieldActive) {
+                        // Shield blocks the shot, no damage
+                        AudioManager.playShieldOn();
+                        startScreenShake(2, 100);
+                        continue; // Skip damage for this enemy, but shot is consumed
+                    }
+                    
+                    e.life -= 1;
                     // Trigger hit flash on the enemy
                     e.hitFlashUntil = Date.now() + 200;
                     // Play hit sound for audio feedback
