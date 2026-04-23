@@ -850,7 +850,7 @@ var game = (function () {
     var level = 1;
     var enemiesKilled = 0;
     var currentWave = 0;
-    var totalWaves = 5;
+    var totalWaves = 1;
     var waves = [];
     var waveState = "idle"; // idle | announce | fight | transition | completed
     var waveAnnouncementStart = 0;
@@ -2172,8 +2172,8 @@ var game = (function () {
     Enemy.prototype.update = function () {
         if (this.dead) { return; }
         
-        // Boss behavior
-        if (this.isBoss && bossActive && this === currentBoss) {
+        // Boss behavior - main boss OR support boss
+        if (this.isBoss && bossActive && (this === currentBoss || this === supportBoss)) {
             this.updateBossBehavior();
             return;
         }
@@ -2368,7 +2368,14 @@ var game = (function () {
         }
         
         // Trigger new abilities based on health percentage and random factors
-        var healthPercentage = bossHP / bossMaxHP;
+        var healthPercentage;
+        if (this === supportBoss) {
+            // Use support boss HP for support boss
+            healthPercentage = supportBossHP / supportBossMaxHP;
+        } else {
+            // Use main boss HP for main boss
+            healthPercentage = bossHP / bossMaxHP;
+        }
         
         if (this.bossAbilityCooldown <= 0 && !this.currentAbility) {
             var randomFactor = Math.random();
@@ -2764,14 +2771,51 @@ var game = (function () {
         // Create support boss with same sprite/behavior
         var support = new Enemy(true);
         support.isSupportBoss = true; // Flag to prevent recursive spawning
-        support.posX = 100; // Position on left side
         support.posY = 120; // Slightly lower than main boss
-        support.downSpeed = 0;
-        support.hSpeed = 1.0 + (currentWave * 0.04); // Slower than main boss (1.5)
-        support.customShootInterval = 70; // Slower shooting (50 for main boss)
-        support.shotCooldown = 70;
+        support.downSpeed = 0; // Same as main boss
+        support.hSpeed = 1.5 + (currentWave * 0.05); // Same as main boss
+        support.customShootInterval = 50; // Same as main boss
+        support.shotCooldown = 50; // Same as main boss
         support.isInFormation = false;
         support.canAttack = true; // Can attack immediately (no intro needed)
+        
+        // Position support boss on opposite side of main boss
+        var margin = 20;
+        var bossCenter = currentBoss.posX + currentBoss.w / 2;
+        var third = canvas.width / 3;
+        var minSeparation = 100; // minimum pixels between closest edges
+        
+        if (bossCenter < third) {
+            // Main boss on left -> support on right
+            support.posX = canvas.width - support.w - margin;
+        } else if (bossCenter > 2 * third) {
+            // Main boss on right -> support on left
+            support.posX = margin;
+        } else {
+            // Main boss centered -> random far end
+            support.posX = (Math.random() < 0.5) ? margin : (canvas.width - support.w - margin);
+        }
+        
+        // Ensure sufficient separation to avoid overlap/collision
+        if (support.posX > currentBoss.posX) {
+            // Support is to the right of main boss
+            var requiredRight = currentBoss.posX + currentBoss.w + minSeparation;
+            if (support.posX < requiredRight) {
+                support.posX = requiredRight;
+                if (support.posX + support.w > canvas.width - margin) {
+                    support.posX = canvas.width - support.w - margin;
+                }
+            }
+        } else {
+            // Support is to the left of main boss
+            var requiredLeft = currentBoss.posX - support.w - minSeparation;
+            if (support.posX > requiredLeft) {
+                support.posX = requiredLeft;
+                if (support.posX < margin) {
+                    support.posX = margin;
+                }
+            }
+        }
         
         // Set support boss HP to 25% of main boss max HP
         supportBossMaxHP = Math.floor(bossMaxHP * 0.25);
@@ -2783,7 +2827,7 @@ var game = (function () {
         support.bossAbilityCooldown = 120; // Longer cooldown for support boss
         support.currentAbility = null;
         support.abilityStartTime = 0;
-        support.abilityDuration = 0;
+        support.abilityDuration = 6000;
         support.originalSpeed = support.hSpeed;
         
         // Add support boss to enemies array
@@ -3431,6 +3475,38 @@ var game = (function () {
         
         bufferctx.fillStyle = color;
         bufferctx.fillRect(barX, barY, barWidth * percentage, barHeight);
+    }
+
+    function drawSupportBossHealthBar() {
+        if (!supportBoss || supportBoss.dead || supportBossMaxHP <= 0) return;
+        
+        var barWidth = 80; // Smaller than main boss bar
+        var barHeight = 8;
+        var barX = supportBoss.posX + (supportBoss.w - barWidth) / 2;
+        var barY = supportBoss.posY - 15; // Above the boss sprite
+        var healthPercentage = Math.max(0, Math.min(1, supportBossHP / supportBossMaxHP));
+        var healthWidth = barWidth * healthPercentage;
+        
+        // Background
+        bufferctx.fillStyle = "rgba(0, 0, 0, 0.85)";
+        bufferctx.fillRect(barX - 1, barY - 1, barWidth + 2, barHeight + 2);
+        
+        // Border - purple color to distinguish from main boss (red)
+        bufferctx.strokeStyle = "#AA00FF";
+        bufferctx.lineWidth = 1;
+        bufferctx.strokeRect(barX, barY, barWidth, barHeight);
+        
+        // Health fill - purple gradient style
+        var healthColor = healthPercentage > 0.5 ? "#AA00FF" : 
+                         healthPercentage > 0.25 ? "#CC66FF" : "#FF00FF";
+        bufferctx.fillStyle = healthColor;
+        bufferctx.fillRect(barX + 1, barY + 1, healthWidth - 2, barHeight - 2);
+        
+        // Label - smaller font
+        bufferctx.fillStyle = "#FFFFFF";
+        bufferctx.font = "6px 'Press Start 2P'";
+        bufferctx.textAlign = "center";
+        bufferctx.fillText("MINI", barX + barWidth / 2, barY - 4);
     }
 
     function drawHud() {
@@ -4202,6 +4278,9 @@ var game = (function () {
         
         // Draw boss health bar if active
         drawBossHealthBar();
+        
+        // Draw support boss health bar if active
+        drawSupportBossHealthBar();
         
         // Draw combo and floating text systems
         drawComboUI();
